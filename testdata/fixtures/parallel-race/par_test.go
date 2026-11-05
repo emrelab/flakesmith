@@ -17,7 +17,16 @@ import (
 //
 // This is the simplest deterministic model of the "shared resource + concurrent
 // access" flake.
-const holdFor = 40 * time.Millisecond
+//
+// Load resistance: the original design held the window with a fixed 40ms
+// sleep. On a loaded runner the second test can enter more than 40ms after
+// the first, the window never overlaps, and the probe honestly concludes
+// "no parallel flake" — the fixture, not the tool, flaked under load. The
+// window is therefore an adaptive poll: while another test has not arrived,
+// stay for up to overlapWait; once both are in, poll returns in milliseconds,
+// so the failing (parallel) path stays fast. The sequential (-parallel=1)
+// path pays overlapWait once per test — bounded and intentional.
+const overlapWait = 500 * time.Millisecond
 
 var (
 	mu        sync.Mutex
@@ -30,20 +39,35 @@ func enter(t *testing.T) {
 
 	mu.Lock()
 	active++
+	// seen = my concurrency at ENTRY. The victim is the test that walked in
+	// while another was still active — the first arriver holds the door but
+	// never fails. Exactly one victim per overlap, as before.
+	seen := active
 	if active > maxActive {
 		maxActive = active
 	}
-	seen := maxActive
 	mu.Unlock()
 
-	time.Sleep(holdFor) // wait long enough for the other test to enter too
+	if seen == 1 {
+		// First in: hold the door open for a late sibling.
+		deadline := time.Now().Add(overlapWait)
+		for time.Now().Before(deadline) {
+			mu.Lock()
+			a := active
+			mu.Unlock()
+			if a > 1 {
+				break
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+	}
 
 	mu.Lock()
 	active--
 	mu.Unlock()
 
 	if seen > 1 {
-		t.Fatalf("concurrent access: maxActive=%d", seen)
+		t.Fatalf("concurrent access: activeAtEntry=%d", seen)
 	}
 }
 
