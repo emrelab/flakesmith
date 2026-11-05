@@ -1,6 +1,7 @@
 /flakesmith
 /dist/
 /.flakesmith/
+.flakesmith/
 *.test
 *.out
 coverage.html
