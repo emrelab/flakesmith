@@ -44,7 +44,9 @@ jobs:
         run: go vet ./...
 
       - name: test
-        run: go test -race ./...
+        # Default 10m is a trap: the first public run proved the fixture-driven
+        # integration suite exceeds it on shared runners (panic at 10m0s).
+        run: go test -timeout 20m -race ./...
 
       # The tool itself must not produce flakes. A state leak is caught here.
       # Per-PR sweep is -count=3: the full -count=10 sweep roughly triples
