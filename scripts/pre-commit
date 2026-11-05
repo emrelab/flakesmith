@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # flakesmith pre-commit gate — mechanical CI gate over the packages a commit touches.
 #
-# Why a hook: if the rule stays on paper, the only guarantee is an LLM obeying it.
-# Why not the full suite: `go test -race ./...` takes ~3 min and the cli package
-# has a test that is shaky under load. The full suite is CI's job; the gate here
-# exists to keep the commit within seconds.
+# Why a hook: a rule that lives only on paper has no enforcement; CI is too
+# far away to keep each commit honest.
+# Why not the full suite: `go test -race ./...` takes ~3 min and the cli
+# package spawns real `go test` subprocesses, so it stretches on a busy
+# machine. The full suite is CI's job; the gate here exists to keep the commit
+# within seconds.
 #
 # Scope: the packages the staged diff TOUCHES. If go.mod / Makefile / workflow
 # was touched, the scope becomes the whole repo.
@@ -19,7 +21,7 @@ fail() {
   printf '\n%sCOMMIT BLOCKED%s  %s\n' "$red" "$off" "$1" >&2
   printf 'To do: revert with "git checkout -- ." and fix, or stage a passing change\n' >&2
   printf 'Exit WITHOUT committing until this gate is green.\n' >&2
-  printf -- 'Skipping with --no-verify is a violation.\n\n' >&2
+  printf 'Skipping with --no-verify skips the only mechanical gate there is.\n\n' >&2
   exit 1
 }
 
@@ -32,11 +34,18 @@ staged=$(git diff --cached --name-only --diff-filter=ACMR)
 # Note: stripping the `.go` extension is not enough, the DIRECTORY OF THE FILE is
 # required — passing ./internal/domain/foo_test to go test eats a "setup failed" and
 # the gate would block even correct code.
-pkgs=$(printf '%s\n' "$staged" | grep '\.go$' | while IFS= read -r f; do
+# And testdata/ must never enter the root scope at all: fixture modules are
+# separate Go modules; ./testdata/fixtures/x is a "setup failed" for the root
+# `go test` and would block every fixture PR — the easiest contribution.
+pkgs=$(printf '%s\n' "$staged" | grep '\.go$' | grep -v '^testdata/' | while IFS= read -r f; do
          d=$(dirname "$f")
          [ "$d" = "." ] && d="./..." || d="./$d"
          printf '%s\n' "$d"
        done | sort -u)
+
+# Fixture modules touched: gate them the way `make fixtures` does — build+vet
+# INSIDE each module. A fixture that does not compile is still a red gate.
+fx=$(printf '%s\n' "$staged" | sed -n 's|^testdata/fixtures/\([^/]*\)/.*|\1|p' | sort -u)
 
 # Scope grows when contract files were touched.
 if printf '%s\n' "$staged" | grep -qE '^(go\.mod|go\.sum|Makefile|\.github/workflows/|scripts/pre-commit)$'; then
@@ -64,5 +73,16 @@ if [ -n "$pkgs" ]; then
     fail "go test -race red: $(printf '%s' "$pkgs" | tr '\n' ' ')"
   fi
 fi
+
+# 4) Fixture modules touched — build+vet inside each module (their own go.mod).
+for name in $fx; do
+  d="testdata/fixtures/$name"
+  [ -f "$d/go.mod" ] || continue
+  out=$(cd "$d" && go build ./... 2>&1 && go vet ./... 2>&1)
+  if [ -n "$out" ]; then
+    printf '%s\n' "$out" >&2
+    fail "fixture module $d fails build/vet"
+  fi
+done
 
 exit 0
