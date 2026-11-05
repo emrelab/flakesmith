@@ -1,0 +1,102 @@
+name: flakesmith
+description: Finds flaky failures in Go tests, reduces them to the smallest witness and produces capsules
+author: emrelab
+
+branding:
+  icon: activity
+  color: orange
+
+inputs:
+  paths:
+    description: Packages to scan (in go test argument form)
+    required: false
+    default: ./...
+  budget:
+    description: Total go test run budget
+    required: false
+    default: "200"
+  timeout:
+    description: Total time budget (Go duration)
+    required: false
+    default: 10m
+  format:
+    description: Report format (text|markdown|json)
+    required: false
+    default: markdown
+  fail-on-flake:
+    description: Turn the job red when a flake is found (true/false)
+    required: false
+    default: "false"
+
+outputs:
+  report:
+    description: Path of the report file
+    value: ${{ steps.hunt.outputs.report }}
+  flakes:
+    description: Number of flakes found
+    value: ${{ steps.hunt.outputs.flakes }}
+
+runs:
+  using: composite
+  steps:
+    # The action builds from its own source: `uses: emrelab/flakesmith@v0.1.0`
+    # says which version is running. `go install ...@latest` could not do this —
+    # with no tag it installs nothing, and with a tag the action ref and the
+    # running binary could be different versions.
+    - name: build flakesmith
+      shell: bash
+      run: |
+        set -euo pipefail
+        cd "$GITHUB_ACTION_PATH"
+        go build -trimpath -o "$RUNNER_TEMP/bin/flakesmith" ./cmd/flakesmith
+        echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+    - name: hunt flakes
+      id: hunt
+      shell: bash
+      env:
+        FS_PATHS: ${{ inputs.paths }}
+        FS_BUDGET: ${{ inputs.budget }}
+        FS_TIMEOUT: ${{ inputs.timeout }}
+        FS_FORMAT: ${{ inputs.format }}
+        FS_FAIL: ${{ inputs.fail-on-flake }}
+      run: |
+        set -uo pipefail
+        report="$RUNNER_TEMP/flakesmith-report.$FS_FORMAT"
+        args=(hunt $FS_PATHS --format "$FS_FORMAT" --budget "$FS_BUDGET" --timeout "$FS_TIMEOUT")
+        [ "$FS_FAIL" = "true" ] && args+=(--fail-on-flake)
+
+        flakesmith "${args[@]}" | tee "$report"
+        status=${PIPESTATUS[0]}
+
+        # The counter depends on the format: json carries a "flakes" array in a
+        # single document, text and markdown print headings. A single grep
+        # pattern always returned 0 on json.
+        case "$FS_FORMAT" in
+          json) count=$(grep -c '"id":' "$report" || true) ;;
+          *)    count=$(grep -Ec '^(### flake:|flake found:)' "$report" || true) ;;
+        esac
+        echo "flakes=${count:-0}" >> "$GITHUB_OUTPUT"
+        echo "report=$report" >> "$GITHUB_OUTPUT"
+
+        # Exit code contract: 0 clean, 1 flake (gate), 3 not found in repro,
+        # 4 budget, 5 unsupported, 6 build. hunt returns 0 when clean.
+        exit "$status"
+
+    - name: add report to job summary
+      if: always()
+      shell: bash
+      env:
+        FS_FORMAT: ${{ inputs.format }}
+      run: |
+        report="$RUNNER_TEMP/flakesmith-report.$FS_FORMAT"
+        if [ -f "$report" ]; then cat "$report" >> "$GITHUB_STEP_SUMMARY"; fi
+
+    - name: save capsules
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: flakesmith-capsules
+        path: "**/.flakesmith/*.json"
+        if-no-files-found: ignore
+        retention-days: 30

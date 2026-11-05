@@ -1,0 +1,225 @@
+package cli
+
+import (
+	"context"
+	"flag"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/emrelab/flakesmith/internal/capsule"
+	"github.com/emrelab/flakesmith/internal/domain"
+	"github.com/emrelab/flakesmith/internal/facts"
+	"github.com/emrelab/flakesmith/internal/gotest"
+	"github.com/emrelab/flakesmith/internal/harness"
+	"github.com/emrelab/flakesmith/internal/policy"
+)
+
+// replayCmd re-runs a capsule's witness N times and reports how often the
+// flake reproduced.
+//
+// The point is trust, not discovery: a capsule is only worth committing if
+// someone else can reproduce it tomorrow. Replay is also the honest way to
+// notice that a flake has already been fixed — the witness goes green and the
+// capsule is stale rather than wrong.
+func replayCmd(ctx context.Context, args []string, out IO) error {
+	var (
+		n      int
+		envKV  string
+		dir    string
+		pkgArg string
+	)
+	fs := flag.NewFlagSet("replay", flag.ContinueOnError)
+	fs.SetOutput(out.Stderr)
+	fs.IntVar(&n, "n", 5, "how many times to run")
+	fs.StringVar(&envKV, "env", "", "KEY=VALUE for env flakes (the capsule does not store the value)")
+	fs.StringVar(&dir, "capsule-dir", "", "capsule directory (default .flakesmith)")
+	fs.StringVar(&pkgArg, "pkg", "", "package directory (default: the directory the capsule recorded)")
+	if err := parseFlags(fs, args); err != nil {
+		return err
+	}
+
+	id, storeDir, _, err := resolveCapsule(fs.Args(), dir, "")
+	if err != nil {
+		return err
+	}
+	c, err := capsule.NewStore(storeDir).Read(id)
+	if err != nil {
+		return domain.Wrap(domain.ErrUsage, "%s", err)
+	}
+	if c.Status != domain.StatusConfirmed {
+		return domain.Wrap(domain.ErrUsage,
+			"%s is a partial capsule (%s); no verified witness to re-run", c.ID, c.Status)
+	}
+	if n <= 0 {
+		return domain.Wrap(domain.ErrUsage, "-n must be positive")
+	}
+
+	pkgDir, f, err := replayTarget(pkgArg, c, storeDir)
+	if err != nil {
+		return err
+	}
+	clause, err := harness.ResolveClause(f.Clause, c.Witness.Victim.Name, nil)
+	if err != nil {
+		return err
+	}
+
+	spec := domain.RunSpec{
+		Package:  pkgDir,
+		RunRegex: "^" + c.Witness.Victim.Name + "$",
+		Count:    1,
+		Parallel: 1,
+		// If the capsule was verified with -race, replay must also run -race:
+		// otherwise half the evidence (the race detector's report) silently
+		// vanishes and replay saying "not reproduced" would not be honest.
+		Race: c.Witness.Flags.Race,
+	}
+	switch c.Kind {
+	case domain.KindEnv:
+		// The value is not in the capsule and never will be: the user provides it.
+		// Without it the run says "not reproduced" — correct, the info is missing.
+		if envKV == "" {
+			return domain.Wrap(domain.ErrUsage,
+				"this capsule is environment-dependent; it cannot be reproduced without --env %s=<value>",
+				strings.Join(c.Witness.EnvDiff, "=<value> --env "))
+		}
+		spec.Env = []string{envKV}
+	case domain.KindRepeat:
+		spec.RunRegex = "^" + c.Witness.Victim.Name + "$"
+		spec.Count = replayRepeatCount(c)
+	default:
+		spec.RunRegex = "^" + domain.WitnessFuncName + "$"
+		spec.Parallel = c.Witness.Flags.Parallel
+		if spec.Parallel <= 0 {
+			spec.Parallel = 1
+		}
+	}
+
+	runner := &gotest.Exec{}
+	outcome := func() (bool, error) {
+		switch c.Kind {
+		case domain.KindEnv, domain.KindRepeat:
+			res, err := runner.Run(ctx, spec)
+			if err != nil {
+				return false, err
+			}
+			return res.Failed(c.Witness.Victim.Name), nil
+		default:
+			// Witness chain: the verdict is in the subtest, not the parent test.
+			ctx, unlock, lerr := policy.Locked(ctx, pkgDir)
+			if lerr != nil {
+				return false, lerr
+			}
+			defer unlock()
+
+			h, err := installForKind(pkgDir, clause, c)
+			if err != nil {
+				return false, err
+			}
+			defer func() { _ = h.Remove() }()
+			spec.Source = h.Digest()
+
+			res, err := runner.Run(ctx, spec)
+			if err != nil {
+				return false, err
+			}
+			return res.Failed(domain.WitnessSubtest(domain.WitnessFuncName, c.Witness.Victim.Name)), nil
+		}
+	}
+
+	var failed int
+	var firstErr error
+	for i := 0; i < n; i++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		ok, err := outcome()
+		if err != nil {
+			firstErr = err
+			break
+		}
+		if ok {
+			failed++
+		}
+	}
+
+	_, _ = fmt.Fprintf(out.Stdout, "\ncapsule: %s (%s)\n", c.ID, c.Kind)
+	_, _ = fmt.Fprintf(out.Stdout, "victim : %s\n", c.Witness.Victim.Name)
+	_, _ = fmt.Fprintf(out.Stdout, "run    : %d/%d reproduced\n", failed, n)
+	if firstErr != nil {
+		_, _ = fmt.Fprintf(out.Stdout, "error  : %v\n", firstErr)
+	}
+
+	switch {
+	case failed == n && n > 0:
+		_, _ = fmt.Fprintln(out.Stdout, "result : deterministic")
+		return nil
+	case failed == 0:
+		_, _ = fmt.Fprintln(out.Stdout, "result : never reproduced — the flake may already be fixed (stale capsule)")
+		return domain.ErrNotReproduced
+	default:
+		_, _ = fmt.Fprintf(out.Stdout, "result : flaky (%d/%d) — probabilistic\n", failed, n)
+		return domain.Wrap(domain.ErrNotReproducible, "reproduced in %d/%d runs", failed, n)
+	}
+}
+
+// installForKind writes the witness with the template its class needs.
+func installForKind(pkgDir, clause string, c domain.Capsule) (*harness.Harness, error) {
+	steps := c.Witness.Steps
+	if len(steps) == 0 {
+		steps = []domain.Step{{Label: domain.VictimLabel(c.Witness.Victim.Name), Test: c.Witness.Victim}}
+	}
+	if c.Kind == domain.KindParallel {
+		return harness.InstallParallel(pkgDir, clause, domain.WitnessFuncName, steps, "replay")
+	}
+	return harness.Install(pkgDir, clause, domain.WitnessFuncName, steps, "replay")
+}
+
+// replayRepeatCount is the -count a repeat witness has to run with.
+//
+// Witness.Flags.Count is what the hunt actually used. Older capsules only carry
+// Observation.Runs (the verification rounds), which is 2 — replaying with that
+// makes a -count=50 flake look fixed. Prefer the explicit count, fall back to
+// the probe default, and never to the verification count.
+func replayRepeatCount(c domain.Capsule) int {
+	if c.Witness.Flags.Count > 0 {
+		return c.Witness.Flags.Count
+	}
+	return 10
+}
+
+// replayTarget finds the package the capsule is about.
+//
+// Target.RelDir is what the user typed when hunting, which is only meaningful
+// in the same directory layout. A capsule is meant to outlive that: it travels
+// in a PR comment, a CI artifact and a colleague's checkout. So the candidates
+// are tried in order and the first one that actually declares the victim wins —
+// and if none does, the tool says so instead of running something else.
+func replayTarget(pkgArg string, c domain.Capsule, storeDir string) (string, facts.PkgFacts, error) {
+	candidates := []string{pkgArg, c.Target.RelDir, filepath.Dir(storeDir), "."}
+	tried := make([]string, 0, len(candidates))
+	for _, cand := range candidates {
+		if cand == "" {
+			continue
+		}
+		abs, err := filepath.Abs(cand)
+		if err != nil {
+			continue
+		}
+		if st, statErr := os.Stat(abs); statErr != nil || !st.IsDir() {
+			continue
+		}
+		f, err := facts.Scan(abs)
+		if err != nil {
+			continue
+		}
+		if _, ok := f.Clause[c.Witness.Victim.Name]; ok {
+			return abs, f, nil
+		}
+		tried = append(tried, abs)
+	}
+	return "", facts.PkgFacts{}, domain.Wrap(domain.ErrUsage,
+		"package containing test %s not found (tried: %s); specify it with --pkg",
+		c.Witness.Victim.Name, strings.Join(tried, ", "))
+}
