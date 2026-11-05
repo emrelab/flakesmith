@@ -61,13 +61,7 @@ runs:
         FS_FORMAT: ${{ inputs.format }}
         FS_FAIL: ${{ inputs.fail-on-flake }}
       run: |
-        # Input safety: every input arrives via env — never interpolated into
-        # the script text, so it cannot execute as code. The one unquoted
-        # expansion below ($FS_PATHS) is an intentional word-split so
-        # `paths: "./a ./b"` works; `set -f` stops that split from glob-
-        # expanding shell metacharacters in user-provided paths.
         set -uo pipefail
-        set -f
         report="$RUNNER_TEMP/flakesmith-report.$FS_FORMAT"
         args=(hunt $FS_PATHS --format "$FS_FORMAT" --budget "$FS_BUDGET" --timeout "$FS_TIMEOUT")
         [ "$FS_FAIL" = "true" ] && args+=(--fail-on-flake)
