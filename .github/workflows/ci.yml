@@ -21,7 +21,15 @@ jobs:
       run:
         shell: bash
     steps:
+      # Windows runner images ship git with core.autocrlf=true; checkout would
+      # write CRLF working trees and gofmt would flag every file. Env-level git
+      # config (GIT_CONFIG_COUNT, git >= 2.31) outranks the image's system
+      # gitconfig for the checkout process, so files materialize with LF.
       - uses: actions/checkout@v4
+        env:
+          GIT_CONFIG_COUNT: '1'
+          GIT_CONFIG_KEY_0: core.autocrlf
+          GIT_CONFIG_VALUE_0: 'false'
       - uses: actions/setup-go@v5
         with:
           go-version: '1.26'
@@ -38,8 +46,10 @@ jobs:
         run: go test -race ./...
 
       # The tool itself must not produce flakes. A state leak is caught here.
+      # Default 10m test timeout is too small: the cli dogfood tests spawn real
+      # `go test` subprocesses; a full -count=10 sweep needs well over that.
       - name: test (repeat, flake hunt)
-        run: go test -count=10 ./...
+        run: go test -timeout 45m -count=10 ./...
 
       - name: fixtures
         run: make fixtures
