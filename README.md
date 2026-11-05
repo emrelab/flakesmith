@@ -1,5 +1,11 @@
 # flakesmith
 
+[![ci](https://github.com/emrelab/flakesmith/actions/workflows/ci.yml/badge.svg)](https://github.com/emrelab/flakesmith/actions/workflows/ci.yml)
+[![nightly](https://github.com/emrelab/flakesmith/actions/workflows/nightly.yml/badge.svg)](https://github.com/emrelab/flakesmith/actions/workflows/nightly.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/emrelab/flakesmith.svg)](https://pkg.go.dev/github.com/emrelab/flakesmith)
+[![Go Report Card](https://goreportcard.com/badge/github.com/emrelab/flakesmith)](https://goreportcard.com/report/github.com/emrelab/flakesmith)
+[![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+
 > Reproduce the flake in 30 seconds instead of 30 minutes — and leave a permanent regression test in the repo.
 
 Finds flaky Go-test failures caused by **order, parallelism, repetition and
@@ -17,6 +23,8 @@ go test -json  →  hypothesis order  →  ddmin  →  capsule  →  regression 
                   parallel
                   env
 ```
+
+![flakesmith in action](docs/flakesmith-demo.gif)
 
 Changing the order requires a temporary witness file, because in Go
 `go test -run '^(TestA|TestB)$'` runs in **source order** — the regex order
@@ -74,6 +82,33 @@ The price of the build tag: `go test ./...` does not see it. In exchange the
 default suite neither slows down nor turns red. The test **will be red** right
 now — the artifact's job is to catch the flake, not to fix it. After the fix it
 turns green and guards the regression permanently.
+
+## Scanned real repos (beyond our own fixtures)
+
+What a flake hunter should say about a healthy codebase is *nothing* — so the
+first real-world metric is **false positives**, not witnesses:
+
+| Repo | Scan | Result |
+|---|---|---|
+| `sirupsen/logrus` | root package | 0 flakes; run budget hit → self-reported `partial` capsule |
+| `rs/zerolog` | root package | 0 flakes; budget-capped, honest `partial` |
+| `spf13/viper` | root package | 0 flakes; budget-capped, honest `partial` |
+| `fatih/color` | root package | 0 flakes; budget-capped, honest `partial` |
+| `mattn/go-colorable` | root package | clean full scan, 0 flakes |
+| `urfave/cli` v3 | root package | 0 flakes; budget-capped, honest `partial` |
+| `google/trillian` @ pre-[#2792] | `./log` | clean full scan, 0 flakes — see note |
+
+[#2792]: https://github.com/google/trillian/pull/2792
+
+**The trillian note:** we checked out the parent of the commit that fixed
+their order-dependent test and hunted `./log` there. The suite passed clean on
+our machine — their pollution needed a wider run context than the package
+replay produces. Reported as-is; no witness claimed.
+
+0 false positives across all seven. Hunting ≥2 confirmed real-world
+`polluter→victim` pairs is the tracked next milestone
+([#1](https://github.com/emrelab/flakesmith/issues/1)) — this table will only
+ever list scans that actually ran.
 
 ## Commands
 
@@ -148,7 +183,7 @@ class, it names the class it cannot see.
 ```
 
 The action builds its own source from `GITHUB_ACTION_PATH`: `@v0.1.0` says
-which version is running, with no waiting on the proxy for a tag. Go 1.26+ is
+which version is running, with no waiting on the proxy for a tag. Go 1.24+ is
 required (`actions/setup-go` is on you).
 
 `flakesmith init` writes this file into your repo (it never overwrites an
@@ -177,6 +212,10 @@ make fmt     # gofmt
 
 Every module under `testdata/fixtures` demonstrates a single flake class;
 adding a new class is the easiest entry point. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+CI dogfoods the tool on its own repo: the `self-hunt` job runs `flakesmith
+hunt` against flakesmith's packages, so a leaked witness file or a global
+state leak turns our CI red before it could embarrass a user.
 
 ## License
 

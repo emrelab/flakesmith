@@ -1,7 +1,7 @@
-# FlakeSmith — Architecture and Coding Plan
+# FlakeSmith — Architecture
 
 **Version:** 1.1 · **Date:** November 1, 2026 · **Last synced:** November 4, 2026
-**Status:** Implemented — Stages 1–9 and automation rounds A0–A6 are in the code; the only open item is publishing the repo (push + `v0.1.0` tag).
+**Status:** Implemented and published — `v0.1.0` at github.com/emrelab/flakesmith.
 
 This document describes not "what we will do" but **how we will build it**: package boundaries, types, algorithms, Go-specific traps, and task order. The product definition is not repeated here.
 
@@ -13,7 +13,7 @@ This document describes not "what we will do" but **how we will build it**: pack
 
 It runs processes, reads `-json`, **generates a temporary test file** to change the order, shrinks the result, and writes a permanent regression test. At no stage does it patch the Go toolchain, fork a runtime, or compile to WASM.
 
-This decision is the single thing that fits the MVP into 8–10 weeks. ReplayGo (the A− candidate) was eliminated for exactly this reason: touching the runtime means a rebase on every Go release.
+This decision is the single thing that kept the MVP inside one developer’s reach. ReplayGo (the A− candidate) was eliminated for exactly this reason: touching the runtime means a rebase on every Go release.
 
 ### 1.1. Five design constraints
 
@@ -890,103 +890,17 @@ The generated test file is compared byte-by-byte (`testdata/golden/*.go`). Code-
 
 - Integration tests are skipped with `testing.Short()`; a separate CI job.
 - No test depends on real time/ports/network.
-- `go test -count=10 ./...` runs on every PR in CI (using our own tool on ourselves — dogfooding).
+- PRs run `-count=3` on three OSes; the full `-count=10` sweep runs nightly (`nightly.yml`); CI also runs our own tool against our own repo (`self-hunt` job) — dogfooding.
 
 ---
 
-## 12. Task order and why this order
+## 12. Build history: the order it was built in, and why
 
-**Vertical slice first, horizontal layers later.** The first five tasks build an end-to-end pipeline with the `repeat` probe (discover → run → capsule → report). That way every later probe plugs into working infrastructure. Writing layer by layer (all types first, then the whole runner, then all probes) gives you the "nothing works" feeling in week 3.
+**Vertical slice first, horizontal layers later.** The build went: module skeleton + domain types → runner (`Discover` + `Run`) → `facts` AST scanner → harness → **`repeat` probe end-to-end** (discover → run → capsule → report) → budget/cancellation → ddmin → `order` probe → `compile` → CLI + markdown/JSON output → `parallel`/`env` probes → GitHub Action + docs. Each step’s acceptance criteria are no longer prose here — they are named tests and fixtures in the tree.
 
-### Task 1 — Module skeleton and domain types
+The first end-to-end slice (through the `repeat` probe) already produced a usable product; every later probe plugged into working infrastructure instead of a layer cake of half-compiled types. Writing layer by layer (all types first, then the whole runner, then all probes) is the path that produces the "nothing works yet" feeling three weeks in — avoided on purpose.
 
-**To do:** `go mod init github.com/emrelab/flakesmith`; write the §4 types into `internal/domain`; `names.go` constants; `errors.go` typed errors + `ExitCode(err) int`; `LICENSE`, `README` skeleton, `CI` workflow.
-**Acceptance criteria:** `go build ./...` and `go vet ./...` clean; the `domain` package imports no internal package; the `ExitCode` table verified with a table test.
-**Files:** `go.mod`, `internal/domain/*.go`, `internal/domain/domain_test.go`, `.github/workflows/ci.yml`.
-
-### Task 2 — Runner: Discover + Run
-
-**To do:** `Exec` runner (§5.1–5.2); `-json` parser; `normalize.go`; `*exec.ExitError` → normal-result distinction; build-failure detection; timeout.
-**Acceptance criteria:** on `testdata/fixtures/order-basic`, `Discover` returns 3 test names in source order; via `Run`, a failing test yields `Outcomes[...].Status == StatusFail` and `err == nil`; `-count=1` is always in the arguments; a fixture with a build error yields `BuildFailed=true`.
-**Files:** `internal/gotest/{runner,discover,json,normalize}.go` + tests.
-
-### Task 3 — PkgFacts: AST scanner
-
-**To do:** scan the package directory with `go/parser`; package clause map (test → file → clause); package-level `var` names; the package var each test function writes/reads; `os.Getenv` keys; presence of `TestMain`; subtest (`t.Run`) usage; `time.Now`/`rand`/`net` usage.
-**Acceptance criteria:** in `order-basic`, `GlobalsWritten["TestSeedDB"] == ["seeded"]` and `GlobalsRead["TestCheckout"] == ["seeded"]`; in `clause-mismatch`, two different clauses are reported; the fixture with subtests has `Subtests=true`.
-**Files:** `internal/facts/{scan,facts}.go` + `testdata/fixtures/*`.
-
-### Task 4 — Harness: render + install/remove
-
-**To do:** template (§6.1); `format.Source` pre-validation; `zz_flakesmith_witness_<suffix>_test.go` writing; `Remove()`; `cleanupStale()`; `SIGINT` capture; refusal on clause mismatch; function-name collision resolution.
-**Acceptance criteria:** in `order-basic`, the generated harness really takes the victim down (5/5); `clause-mismatch` yields `ErrUnsupportedTest`; after `Ctrl-C`, no `zz_flakesmith_witness_*` remains in the directory; the golden file matches exactly.
-**Files:** `internal/harness/*.go`, `testdata/golden/witness_basic_test.go`.
-
-### Task 5 — `repeat` probe + capsule + text report (first end-to-end)
-
-**To do:** `Repeat` probe (§7.1); `capsule.New/Write`; content-addressed ID; `report/text.go`; `cli.Run` skeleton + `hunt` command (repeat only).
-**Acceptance criteria:** the output of `flakesmith hunt ./testdata/fixtures/repeat-accumulate` says "repeat flake: TestAccumulating, failed on round 2" and writes `.flakesmith/fs_*.json`; the same command produces **the same ID** the second time; `go build` still has zero external dependencies.
-**Files:** `internal/probe/{probe,repeat,registry}.go`, `internal/capsule/*.go`, `internal/report/text.go`, `internal/cli/{cli,hunt}.go`, `cmd/flakesmith/main.go`.
-
-> **At this point the product works.** The remaining tasks add new probes and outputs to the same pipeline — the architecture no longer changes.
-
-### Task 6 — Budget, cancellation, error paths
-
-**To do:** `policy.Budget` + `budgeted` wrapper (§10); `SIGINT` → `context` cancellation; `partial` capsule; wiring the exit-code table into `cli`.
-**Acceptance criteria:** a run with `--budget 1` exits with code `4` and writes a `status: partial` capsule; after a `timeout` signal the harness is deleted.
-**Files:** `internal/policy/*.go`, `internal/cli/cli.go`.
-
-### Task 7 — ddmin + minimization verification
-
-**To do:** `ddmin` and `Minimize` from §7.3; `FakeRunner` and table tests (synthetic universes: 1 polluter among 16 candidates, 2 polluters, no polluter).
-**Acceptance criteria:** finds the single polluter among 16 candidates in ≤ 20 predicate calls; when the predicate lies 10% of the time, `Minimize` returns `ErrNotReproducible` (never silently returns a wrong result); coverage test: the found set is truly minimal (no element can be removed).
-**Files:** `internal/search/{ddmin,minimize}.go` + tests.
-
-### Task 8 — `order` probe
-
-**To do:** the §7.2 flow; shuffle seed list; `predicate` (§7.4); evidence: global intersection.
-**Acceptance criteria:** in `order-basic`, polluter=TestSeedDB is found; in `file-leak`, `FilesTouched` comes back filled; correct results also on fixtures where the polluter itself fails (the verified `t.Run` behavior); `clause-mismatch` yields `ErrUnsupportedTest`.
-**Files:** `internal/probe/order.go`, `internal/evidence/static.go`.
-
-### Task 9 — `compile`: permanent artifact
-
-**To do:** build-tagged generation (§9.2); the `compile` command; `git diff` check (new files only); `--print` (stdout, without writing to disk).
-**Acceptance criteria:** the generated file passes `go vet -tags flakesmith ./...` clean; `go test -tags flakesmith -run '^TestFlakeRegression_'` reproduces the flake; `go test ./...` (without tags) is unaffected; compiling the same capsule twice leaves the file unchanged.
-**Files:** `internal/compile/*.go`, `internal/cli/compile.go`, `testdata/golden/persistent_*.go`.
-
-### Task 10 — CLI completion + markdown/JSON output + `explain`/`replay`
-
-**To do:** the `repro`, `replay`, `explain`, `init` commands; `--format text|json|markdown`; PR comment generator; `--fail-on-flake`.
-**Acceptance criteria:** every command supports `--help`; `explain` output is produced from the capsule (no re-run); the `markdown` output renders as a table on GitHub; `cli.Run` is a pure function (stdout/stderr injected) and table-tested.
-**Files:** `internal/cli/*.go`, `internal/report/{json,markdown}.go`.
-
-### Task 11 — `parallel` and `env` probes
-
-**To do:** §7.5; set-based minimization; env matrix; `--jobs` package parallelism + per-package lock.
-**Acceptance criteria:** `parallel-race` is classified as `KindParallel`; `env-dependent` finds the right key and does **not** write the value into the capsule (redaction test).
-**Files:** `internal/probe/{parallel,env}.go`, `internal/policy/redact.go`.
-
-### Task 12 — GitHub Action, documentation, real-repo trial
-
-**To do:** `action.yml`; `README` + 3 example capsules; `docs/`; smoke on 5 real open-source Go repos (against their known flaky issues); `--budget`/output tuning.
-**Acceptance criteria:** the Action produces an artifact on the sample repo; at least 2 of the 5 real repos yield a reproducible witness; the README's "first 5 minutes" flow works when followed from scratch.
-**Files:** `action.yml`, `README.md`, `docs/*.md`.
-
-### 12.1. Realistic schedule (part-time, 15–20 hours/week)
-
-| Task | Duration | Cumulative |
-|---|---|---|
-| 1–2 | 1.5 weeks | 1.5 |
-| 3–4 | 1.5 weeks | 3 |
-| **5 (first end-to-end)** | 1 week | **4** |
-| 6–7 | 1 week | 5 |
-| 8 | 1.5 weeks | 6.5 |
-| 9 | 1 week | 7.5 |
-| 10 | 1 week | 8.5 |
-| 11 | 1.5 weeks | 10 |
-| 12 | 1 week | **11 weeks** |
-
-After task 5 the product is usable; 6–12 make it reliable and distributable. For a full-time developer: ~5–6 weeks.
+Remaining roadmap items live in the GitHub issue tracker, not in this document.
 
 ---
 
@@ -994,14 +908,14 @@ After task 5 the product is usable; 6–12 make it reliable and distributable. F
 
 | # | Risk | Impact | Mitigation |
 |---|---|---|---|
-| R1 | `-shuffle` seed space is huge; an order not found in 40 seeds | False negative | Default 40 seeds; raise with `--seeds`; the report says "not found in this range" |
+| R1 | `-shuffle` seed space is huge; an order not found in the seed list | False negative | Default 12 seeds (a 40-seed sweep cost ~12 s/package for no recall gain); raise with `--seeds`; the report says "not found in this range" |
 | R2 | Tests use an external service/DB → reproduction impossible | `ErrNotReproduced` | `status: probabilistic`; warning to the user: "this package uses external dependencies" |
 | R3 | Package contains 200+ tests; one ddmin sweep takes 40s | Budget not enough | Pre-filter with `-run`; `-failfast`; `--seeds 10` on expensive packages |
 | R4 | On Windows, `exec`, path, and port behavior differ | Platform bug | MVP: darwin/linux guaranteed; windows best-effort, smoke in CI |
 | R5 | `TestMain` resets global state; harness ineffective | Not findable | `facts.HasTestMain` → report note; the hypothesis is still tried |
 | R6 | The user's `GOFLAGS` injects `-count` or `-mod=vendor` | Silent wrong result | `GOFLAGS` printed to the debug log; `-count` always passed explicitly (last wins) |
 | R7 | `t.Parallel()` subtest order is unpredictable | Wrong classification | Order hypothesis only under `-parallel=1`; parallel is a separate class |
-| R8 | The tool produces flakes against itself (harness leftovers) | Trust loss | `cleanupStale` + signal capture + `-count=10` dogfooding in CI |
+| R8 | The tool produces flakes against itself (harness leftovers) | Trust loss | `cleanupStale` + signal capture + nightly `-count=10` sweep + `self-hunt` CI job |
 
 ---
 
@@ -1032,6 +946,6 @@ This fence is the written answer to "one more feature" requests: every item is a
 | Most critical interface? | `gotest.Runner` — the foundation of all testability |
 | Most critical file? | `internal/harness` — both the search and the artifact generator |
 | How is order controlled? | Temporary `zz_flakesmith_witness_*_test.go` + `t.Run` chain (`-run` cannot give order) |
-| First working version? | End of task 5 (~4 weeks): `hunt` + repeat probe + capsule |
-| MVP? | End of task 9 (~7.5 weeks): four probes + compile |
+| First working slice? | `hunt` + repeat probe + capsule (first end-to-end build) |
+| MVP? | four probes + `compile` (shipped in `v0.1.0`) |
 | What it doesn't do? | Dashboard, SaaS, LLM, runtime patch, DB replay |
