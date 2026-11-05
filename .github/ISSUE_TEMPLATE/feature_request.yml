@@ -1,0 +1,23 @@
+name: Feature request
+description: A new probe class, output, or workflow
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Check `docs/ARCHITECTURE.md` §14 (the scope fence) first: dashboards,
+        SaaS, LLM fixes, runtime patching and DB replay are deliberately out.
+        Anything else has a real chance.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem, not the solution
+      placeholder: What flake did you fail to catch, and how did you find out?
+    validations:
+      required: true
+  - type: textarea
+    id: wanted
+    attributes:
+      label: What would have helped
+    validations:
+      required: true

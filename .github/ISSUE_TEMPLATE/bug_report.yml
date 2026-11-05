@@ -1,0 +1,36 @@
+name: Bug report
+description: Something misbehaves — a wrong verdict, a crash, a leak
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A flake hunter that leaks witness files or misclassifies is a bug in
+        the worst possible genre. Help us reproduce it.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      placeholder: |
+        Command you ran (exact flags), what it printed, what you expected.
+    validations:
+      required: true
+  - type: textarea
+    id: capsule
+    attributes:
+      label: Capsule / output
+      description: Paste the `.flakesmith/*.json` capsule or the command output. Redact private paths if you like.
+      render: shell
+  - type: input
+    id: go
+    attributes:
+      label: Go version and OS
+      placeholder: go1.26.2 linux/amd64
+    validations:
+      required: true
+  - type: checkboxes
+    id: residue
+    attributes:
+      label: Leftover check
+      options:
+        - label: My repo has no leftover `zz_flakesmith_witness_*` files from the run (if it does, `git status` output goes above — that is exactly the bug we want)
