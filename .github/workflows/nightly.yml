@@ -1,0 +1,35 @@
+name: nightly
+
+# The full -count=10 repeat sweep on all three OSes. On PRs ci.yml runs
+# -count=3 per OS; a leak that only surfaces on the 7th run is the nightly's
+# job to catch. Local equivalent: `make test-repeat`.
+
+on:
+  schedule:
+    - cron: '0 21 * * *' # 00:00 UTC+3
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  repeat-sweep:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        env:
+          GIT_CONFIG_COUNT: '1'
+          GIT_CONFIG_KEY_0: core.autocrlf
+          GIT_CONFIG_VALUE_0: 'false'
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+      - name: test (full repeat sweep)
+        run: go test -timeout 45m -count=10 ./...

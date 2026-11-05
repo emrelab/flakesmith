@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -46,10 +47,12 @@ jobs:
         run: go test -race ./...
 
       # The tool itself must not produce flakes. A state leak is caught here.
-      # Default 10m test timeout is too small: the cli dogfood tests spawn real
-      # `go test` subprocesses; a full -count=10 sweep needs well over that.
+      # Per-PR sweep is -count=3: the full -count=10 sweep roughly triples
+      # wall time on every PR for marginal recall; nightly.yml carries it.
+      # Default 10m test timeout is too small: the cli integration tests spawn
+      # real `go test` subprocesses.
       - name: test (repeat, flake hunt)
-        run: go test -timeout 45m -count=10 ./...
+        run: go test -timeout 25m -count=3 ./...
 
       - name: fixtures
         run: make fixtures
@@ -59,3 +62,54 @@ jobs:
 
       - name: smoke (help)
         run: ./flakesmith help
+
+  # go.mod's floor is go 1.24 (measured: `t.Chdir` in the cli tests is the
+  # newest API used). This job proves the floor on a real 1.24 toolchain
+  # instead of trusting the directive. Unit tests only (-short): the
+  # fixture-driven integration tests drive a modern toolchain end to end and
+  # belong to the 1.26 job.
+  oldest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - name: vet
+        run: go vet ./...
+      - name: build
+        run: make build
+      - name: unit tests
+        run: go test -race -short ./...
+
+  # Dogfooding: our own tool hunts flakes in our own repo. If a witness file
+  # or a leaked global makes our suite order-dependent, this step goes red.
+  # Exit 4 (budget exhausted) is inconclusive, not a failure: it warns and
+  # lets the nightly sweep carry the full load.
+  self-hunt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+      - name: build
+        run: make build
+      - name: hunt our own packages
+        run: |
+          set -uo pipefail
+          ./flakesmith hunt ./... --fail-on-flake --budget 200 --timeout 10m
+          rc=$?
+          if [ "$rc" -eq 4 ]; then
+            echo "::warning::self-hunt ran out of budget — inconclusive, nightly carries the sweep"
+            exit 0
+          fi
+          exit "$rc"
+      - name: save capsules
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: self-hunt-capsules
+          path: "**/.flakesmith/*.json"
+          if-no-files-found: ignore
+          retention-days: 14
