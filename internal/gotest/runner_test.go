@@ -133,7 +133,7 @@ func TestRunBuildFailure(t *testing.T) {
 	defer cancel()
 
 	dir := t.TempDir()
-	writeFile(t, filepath.Join(dir, "go.mod"), "module broken\n\ngo 1.26\n")
+	writeFile(t, filepath.Join(dir, "go.mod"), "module broken\n\ngo 1.21\n")
 	writeFile(t, filepath.Join(dir, "broken_test.go"), "package broken\n\nfunc TestBroken(t *testing.T) { thisIsASyntaxError }\n")
 
 	res, err := e.Run(ctx, domain.RunSpec{Package: dir, Count: 1, Timeout: 60 * time.Second})

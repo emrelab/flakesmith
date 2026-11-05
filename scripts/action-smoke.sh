@@ -25,7 +25,7 @@ mkdir -p "$REPO"
 cat > "$REPO/go.mod" <<'EOF'
 module example.com/sampleservice
 
-go 1.26
+go 1.21
 EOF
 cat > "$REPO/service_test.go" <<'EOF'
 package inventory

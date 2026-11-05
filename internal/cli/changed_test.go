@@ -46,7 +46,7 @@ func gitRepo(t *testing.T) string {
 	}
 
 	git("init", "-b", "main")
-	write(filepath.Join(dir, "go.mod"), "module fixture/changed\n\ngo 1.26\n")
+	write(filepath.Join(dir, "go.mod"), "module fixture/changed\n\ngo 1.21\n")
 	one := filepath.Join(dir, "one", "one_test.go")
 	write(one, `package one
 

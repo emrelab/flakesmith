@@ -8,8 +8,10 @@ cd flakesmith
 make all          # fmt + vet + test + build
 ```
 
-Go 1.26+ is required. There are no dependencies; the absence of a `go.sum`
-file is deliberate.
+Go 1.24+ is required to build. There are no dependencies; the absence of a
+`go.sum` file is deliberate. CI proves both floors: a real 1.24 toolchain runs
+the unit suite (`-short`), the 1.26 job runs the fixture-driven integration
+suite.
 
 ## Golden rules
 
@@ -44,7 +46,7 @@ The easiest contribution. Write a mini module with its own `go.mod` under
 
 ```sh
 mkdir testdata/fixtures/my-flake && cd $_
-printf 'module fixture/myflake\n\ngo 1.26\n' > go.mod
+printf 'module fixture/myflake\n\ngo 1.21\n' > go.mod
 # write one polluter + one victim
 cd - && make fixtures
 ```
