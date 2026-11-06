@@ -48,6 +48,16 @@ func compileCmd(ctx context.Context, args []string, out IO) error {
 		return domain.Wrap(domain.ErrUsage, "%s", err)
 	}
 
+	// A cross-binary witness (#6) cannot become a single regression test file:
+	// its reproduction is two `go test` processes. Refusing with the command
+	// attached turns the exit 5 into a copy-pasteable action instead of a dead
+	// end; the scaffold from `flakesmith init` runs that command as the gate.
+	if c.Witness.CrossBinary {
+		return domain.Wrap(domain.ErrUnsupportedTest,
+			"this witness spans two test binaries and cannot be a regression test file; it reproduces with: %s",
+			c.Repro.Command)
+	}
+
 	// The capsule is portable: if it does not carry its own directory, find
 	// the package hosting the victim. Otherwise compile called with
 	// `--capsule-dir /abs/path` would look for tests in cwd (flakesmith's repo).
@@ -96,8 +106,18 @@ func compileCmd(ctx context.Context, args []string, out IO) error {
 	_, _ = fmt.Fprintf(out.Stdout, "run              : %s\n", compile.CommandLine(c))
 
 	if verify {
-		if err := verifyCompiled(ctx, pkgDir, c, out); err != nil {
-			return err
+		st, verr := verifyCompiled(ctx, &gotest.Exec{}, pkgDir, c, out)
+		if st != "" {
+			// The verdict belongs to the capsule even when it is bad: the whole
+			// point of the contract is that downstream tooling can bind to
+			// verifyStatus instead of guessing from an exit code.
+			c.VerifyStatus = st
+			if _, werr := store.Write(c); werr != nil {
+				return werr
+			}
+		}
+		if verr != nil {
+			return verr
 		}
 	}
 
@@ -111,33 +131,42 @@ func compileCmd(ctx context.Context, args []string, out IO) error {
 	return nil
 }
 
-// verifyCompiled runs the artifact once, exactly as the user would.
+// verifyCompiled runs the artifact once, exactly as the user would, and returns
+// the reproduction contract's verdict (#8):
 //
-// Without it `compile` only asserts a shape: the serial template produced a
-// green test for repeat, parallel and env capsules while still printing "the
-// test will be RED now". A verification that fails is not a warning — an
-// artifact that does not reproduce the flake is worthless, and the exit code
-// must say so.
-func verifyCompiled(ctx context.Context, dir string, c domain.Capsule, out IO) error {
-	res, err := (&gotest.Exec{}).Run(ctx, compile.VerifySpec(c, dir))
+//	verified              the artifact ran and went RED — the flake is reproduced
+//	green-not-reproduced  the artifact ran and stayed GREEN — worthless artifact
+//	skipped-missing-env   the env witness was inert — verification never happened
+//
+// A SKIP is not a verification: a suite that skips our regression prints `ok`,
+// and a CI that reads that as "verified" is the trust bug this contract closes.
+// Both non-verified verdicts are loud: they return ErrNotReproducible (exit 3),
+// the same code "stayed green" has always had. An empty status with a non-nil
+// error means no verdict was reached (build failure) and nothing is recorded.
+func verifyCompiled(ctx context.Context, r gotest.Runner, dir string, c domain.Capsule, out IO) (domain.VerifyStatus, error) {
+	res, err := r.Run(ctx, compile.VerifySpec(c, dir))
 	if err != nil {
-		return err
+		return "", err
 	}
 	fn := domain.PersistentFuncName(c.Witness.Victim.Name)
 
 	switch {
 	case res.BuildFailed:
-		return domain.Wrap(domain.ErrBuildFailed, "the generated regression test did not compile: %s",
+		return "", domain.Wrap(domain.ErrBuildFailed, "the generated regression test did not compile: %s",
 			firstBuildLine(res.BuildOutput))
 	case res.Failed(fn):
-		_, _ = fmt.Fprintln(out.Stdout, "verification     : RED (expected — the flake is still there)")
-		return nil
+		_, _ = fmt.Fprintln(out.Stdout, "verification     : RED (verified — the flake is still there)")
+		return domain.VerifyVerified, nil
 	case res.Status(fn) == domain.StatusSkip:
-		// The env class has no value in the capsule; the test says so with SKIP.
-		_, _ = fmt.Fprintln(out.Stdout, "verification     : SKIP (no env value given; run with --env)")
-		return nil
+		// The env class has no value in the capsule; an unset variable makes the
+		// test inert. Inert is not verified — name the missing keys and exit 3.
+		keys := strings.Join(c.Witness.EnvDiff, ", ")
+		_, _ = fmt.Fprintf(out.Stdout, "verification     : unverified (env variable missing: %s)\n", keys)
+		return domain.VerifySkippedMissingEnv, domain.Wrap(domain.ErrNotReproducible,
+			"the generated test SKIPPED instead of running: %s is not set — run again with the variable set", keys)
 	default:
-		return domain.Wrap(domain.ErrNotReproducible,
+		_, _ = fmt.Fprintln(out.Stdout, "verification     : GREEN (not reproduced)")
+		return domain.VerifyGreenNotReproduced, domain.Wrap(domain.ErrNotReproducible,
 			"the generated test stayed green: for class %s the artifact does not reproduce the flake", c.Kind)
 	}
 }

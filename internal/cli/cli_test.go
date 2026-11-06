@@ -466,22 +466,32 @@ func TestInitIsIdempotent(t *testing.T) {
 //
 // In the single-serial-template era repeat/parallel/env capsules produced green
 // tests; this test stops that bug from returning class by class. The env class
-// expects SKIP: the value is not in the capsule, the test must say so.
+// is the reproduction contract (#8): with the variable absent the witness is
+// inert — that is NOT verification, so the exit code is 3 and the capsule says
+// skipped-missing-env. With the variable present it must go RED and record
+// verified.
 func TestCompileVerifyReproducesEachClass(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test")
 	}
 	cases := []struct {
 		fixture string
+		env     string // KEY=VALUE set for the verify run ("" = leave unset)
 		want    string
+		code    int
 	}{
-		{"order-basic", "RED"},
-		{"repeat-accumulate", "RED"},
-		{"parallel-race", "RED"},
-		{"env-dependent", "SKIP"},
+		{"order-basic", "", "RED", domain.ExitOK},
+		{"repeat-accumulate", "", "RED", domain.ExitOK},
+		{"parallel-race", "", "RED", domain.ExitOK},
+		{"env-dependent", "", "unverified", domain.ExitNotReproduced},
+		{"env-dependent", "FIXTURE_MODE=ci", "RED", domain.ExitOK},
 	}
 	for _, tc := range cases {
-		t.Run(tc.fixture, func(t *testing.T) {
+		name := tc.fixture
+		if tc.env != "" {
+			name += "+env"
+		}
+		t.Run(name, func(t *testing.T) {
 			dir := fixtureDir(t, tc.fixture)
 			store := filepath.Join(t.TempDir(), "c")
 
@@ -489,15 +499,41 @@ func TestCompileVerifyReproducesEachClass(t *testing.T) {
 				"--timeout", "150s", "--budget", "400"); code != domain.ExitOK {
 				t.Fatalf("hunt code=%d %s", code, errOut)
 			}
+			if tc.env != "" {
+				t.Setenv(strings.SplitN(tc.env, "=", 2)[0], strings.SplitN(tc.env, "=", 2)[1])
+			}
 			code, out, errOut := run("compile", "-capsule-dir", store, "--pkg", dir, "--verify")
-			if code != domain.ExitOK {
-				t.Fatalf("compile --verify code=%d\n%s\n%s", code, out, errOut)
+			if code != tc.code {
+				t.Fatalf("compile --verify code=%d, want %d\n%s\n%s", code, tc.code, out, errOut)
 			}
 			if !strings.Contains(out, tc.want) {
 				t.Errorf("verification should contain %q:\n%s", tc.want, out)
 			}
+			// The verdict must survive in the capsule, not just in stdout:
+			// downstream tooling binds to verifyStatus, never to exit codes.
+			wantStatus := domain.VerifyVerified
+			if tc.code != domain.ExitOK {
+				wantStatus = domain.VerifySkippedMissingEnv
+			}
+			if st := storedVerifyStatus(t, store); st != wantStatus {
+				t.Errorf("capsule verifyStatus = %q, want %q", st, wantStatus)
+			}
 		})
 	}
+}
+
+// storedVerifyStatus reads verifyStatus back from the newest capsule file.
+func storedVerifyStatus(t *testing.T, store string) domain.VerifyStatus {
+	t.Helper()
+	ids, err := capsule.NewStore(store).List()
+	if err != nil || len(ids) == 0 {
+		t.Fatalf("no capsule in store: %v", err)
+	}
+	c, err := capsule.NewStore(store).Read(ids[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c.VerifyStatus
 }
 
 // --format json must be a single document: an empty array on a clean run, two
@@ -778,5 +814,211 @@ func TestReplayRejectsUnusableCapsule(t *testing.T) {
 				t.Errorf("stderr %q should contain %q", errOut, tc.want)
 			}
 		})
+	}
+}
+
+// repro --from-json (#5): the CI log already paid for the discovery; repro owes
+// only the witness. The env-dependent fixture is the target of a hand-written
+// failure log, and the import path in that log must resolve to the fixture
+// through `go list` — which is why the command must run inside the repo the
+// log came from (t.Chdir here is the CI checkout).
+func TestReproFromJSONLog(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test")
+	}
+	dir := fixtureDir(t, "env-dependent")
+	t.Chdir(dir)
+
+	log := `{"Action":"start","Package":"fixture/envdependent"}
+{"Action":"run","Package":"fixture/envdependent","Test":"TestDependsOnEnv"}
+{"Action":"fail","Package":"fixture/envdependent","Test":"TestDependsOnEnv"}
+`
+	logFile := filepath.Join(t.TempDir(), "failure.json")
+	if err := os.WriteFile(logFile, []byte(log), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	store := filepath.Join(t.TempDir(), "c")
+
+	code, out, errOut := run("repro", "--from-json", logFile,
+		"-capsule-dir", store, "--timeout", "150s", "--budget", "400")
+	if code != domain.ExitOK {
+		t.Fatalf("code=%d\n%s\n%s", code, out, errOut)
+	}
+	ids, err := capsule.NewStore(store).List()
+	if err != nil || len(ids) == 0 {
+		t.Fatalf("no capsule written: %v", err)
+	}
+	c, err := capsule.NewStore(store).Read(ids[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Kind != domain.KindEnv || c.Target.Victim != "TestDependsOnEnv" {
+		t.Errorf("capsule = %s/%s, want env/TestDependsOnEnv", c.Kind, c.Target.Victim)
+	}
+}
+
+// A failing log with a package this repo does not have is a warning, not a
+// veto; a log with no failures says so honestly with exit 3.
+func TestReproFromJSONEdgeCases(t *testing.T) {
+	write := func(t *testing.T, body string) string {
+		t.Helper()
+		f := filepath.Join(t.TempDir(), "failure.json")
+		if err := os.WriteFile(f, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return f
+	}
+
+	f := write(t, `{"Action":"pass","Package":"p","Test":"TestGreen"}`+"\n")
+	if code, _, errOut := run("repro", "--from-json", f); code != domain.ExitNotReproduced {
+		t.Errorf("clean log: code=%d want %d (%s)", code, domain.ExitNotReproduced, errOut)
+	}
+
+	f = write(t, "this is not a test2json log\nat all\n")
+	if code, _, _ := run("repro", "--from-json", f); code != domain.ExitUsage {
+		t.Errorf("garbage log: code=%d want %d", code, domain.ExitUsage)
+	}
+
+	// Unknown package: warn and continue; with no other suspects the honest
+	// answer is still "not reproduced" (exit 3), not a crash.
+	f = write(t, `{"Action":"fail","Package":"example.com/not/here","Test":"TestGone"}`+"\n")
+	code, _, errOut := run("repro", "--from-json", f)
+	if code != domain.ExitNotReproduced {
+		t.Errorf("foreign package: code=%d want %d (%s)", code, domain.ExitNotReproduced, errOut)
+	}
+	if !strings.Contains(errOut, "cannot be resolved") {
+		t.Errorf("the unresolvable package must be named: %q", errOut)
+	}
+}
+
+// hunt --format sarif (#4) end to end: the order fixture's victim must be
+// pinned at its real declaration — rule id, file uri and line come from the
+// AST scan, and if any of them is missing GitHub shows nothing on the diff.
+func TestHuntSARIFPinsVictimOnDiff(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test")
+	}
+	dirty := fixtureDir(t, "order-basic")
+	code, out, errOut := run("hunt", dirty, "--format", "sarif", "-capsule-dir", t.TempDir())
+	if code != domain.ExitOK {
+		t.Fatalf("code=%d\n%s", code, errOut)
+	}
+
+	var doc struct {
+		Version string `json:"version"`
+		Runs    []struct {
+			Results []struct {
+				RuleID  string `json:"ruleId"`
+				Message struct {
+					Text string `json:"text"`
+				} `json:"message"`
+				Locations []struct {
+					Physical struct {
+						Artifact struct {
+							URI string `json:"uri"`
+						} `json:"artifactLocation"`
+						Region struct {
+							StartLine int `json:"startLine"`
+						} `json:"region"`
+					} `json:"physicalLocation"`
+				} `json:"locations"`
+			} `json:"results"`
+		} `json:"runs"`
+	}
+	if err := json.Unmarshal([]byte(out), &doc); err != nil {
+		t.Fatalf("sarif output is not JSON: %v\n%s", err, out)
+	}
+	if doc.Version != "2.1.0" || len(doc.Runs) != 1 || len(doc.Runs[0].Results) != 1 {
+		t.Fatalf("unexpected document: %s", out)
+	}
+	res := doc.Runs[0].Results[0]
+	if res.RuleID != "flakesmith/order" {
+		t.Errorf("ruleId = %q", res.RuleID)
+	}
+	if len(res.Locations) != 1 {
+		t.Fatalf("victim must be pinned, got %s", out)
+	}
+	phys := res.Locations[0].Physical
+	if !strings.HasSuffix(phys.Artifact.URI, "_test.go") {
+		t.Errorf("uri = %q, want a *_test.go path", phys.Artifact.URI)
+	}
+	if phys.Region.StartLine < 1 {
+		t.Errorf("startLine = %d", phys.Region.StartLine)
+	}
+}
+
+// Cross-binary pollution (#6) end to end: package a dirties a file, package
+// b's victim fails only after a ran. hunt must find the witness across the
+// two `go test` binaries (when --polluter-pkg names the suspect), shrink away
+// the innocent TestNoop, refuse to compile the capsule to a single test file,
+// and replay the two-stage command deterministically.
+func TestHuntCrossBinaryEndToEnd(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test")
+	}
+	dir := fixtureDir(t, "cross-package")
+	a := filepath.Join(dir, "a")
+	b := filepath.Join(dir, "b")
+	store := filepath.Join(t.TempDir(), "c")
+
+	code, out, errOut := run("hunt", b, "--polluter-pkg", a,
+		"-capsule-dir", store, "--timeout", "150s", "--budget", "800")
+	if code != domain.ExitOK {
+		t.Fatalf("hunt code=%d\n%s\n%s", code, out, errOut)
+	}
+	if !strings.Contains(out, "cross-binary") {
+		t.Errorf("the report must say cross-binary:\n%s", out)
+	}
+
+	ids, err := capsule.NewStore(store).List()
+	if err != nil || len(ids) == 0 {
+		t.Fatalf("no capsule: %v", err)
+	}
+	c, err := capsule.NewStore(store).Read(ids[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !c.Witness.CrossBinary || c.Kind != domain.KindOrder {
+		t.Fatalf("capsule = %s cross=%v", c.Kind, c.Witness.CrossBinary)
+	}
+	if len(c.Witness.Polluters) != 1 || c.Witness.Polluters[0].Name != "TestBad" {
+		t.Errorf("polluters = %v, want [TestBad] only", c.Witness.Polluters)
+	}
+	if !strings.Contains(c.Repro.Command, "&&") || !strings.Contains(c.Repro.Command, "TestBad") {
+		t.Errorf("the capsule command must be the two-stage reproduction: %q", c.Repro.Command)
+	}
+
+	// compile must refuse (exit 5) and hand back the runnable command.
+	code, _, errOut = run("compile", "-capsule-dir", store, "--pkg", b)
+	if code != domain.ExitUnsupported {
+		t.Fatalf("compile code=%d want %d (%s)", code, domain.ExitUnsupported, errOut)
+	}
+	if !strings.Contains(errOut, "reproduces with: go test") {
+		t.Errorf("the refusal must carry the command: %q", errOut)
+	}
+
+	// replay runs the two stages and must stay deterministic.
+	code, out, errOut = run("replay", "-capsule-dir", store, "--pkg", b,
+		"--polluter-pkg", a, "-n", "3")
+	if code != domain.ExitOK {
+		t.Fatalf("replay code=%d\n%s\n%s", code, out, errOut)
+	}
+	if !strings.Contains(out, "deterministic") || !strings.Contains(out, "3/3") {
+		t.Errorf("replay output:\n%s", out)
+	}
+}
+
+// Without --polluter-pkg the foreign-package flake stays invisible — and hunt
+// must say "no flake" honestly (exit 0 for a scan), never invent a witness in
+// the victim's own binary. The suspect list is the user's, the engine is ours.
+func TestHuntCrossBinaryNeedsSuspect(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test")
+	}
+	dir := fixtureDir(t, "cross-package")
+	b := filepath.Join(dir, "b")
+	code, _, _ := run("hunt", b, "-capsule-dir", t.TempDir(), "--timeout", "120s", "--budget", "600")
+	if code != domain.ExitOK {
+		t.Fatalf("a scan that finds nothing is exit 0, got %d", code)
 	}
 }

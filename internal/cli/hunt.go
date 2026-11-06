@@ -23,7 +23,12 @@ import (
 
 // huntOptions are the flags shared by `hunt` and `repro`.
 type huntOptions struct {
-	format      string
+	format string
+	// sarifPath (--sarif): a SARIF 2.1.0 document is written to this file in
+	// addition to whatever --format prints. The GitHub Action needs both —
+	// markdown for the job summary, SARIF for code scanning — from ONE run;
+	// a second hunt would double the budget.
+	sarifPath   string
 	repeat      int
 	dir         string
 	seeds       int
@@ -32,12 +37,17 @@ type huntOptions struct {
 	verbose     bool
 	failOnFlake bool
 	race        bool
+	// polluterPkg is the user-typed suspect for the two-binary engine (#6);
+	// polluterDir is it resolved, empty when the flag is absent.
+	polluterPkg string
+	polluterDir string
 }
 
 // addFlags registers the shared flags on fs, so hunt and repro cannot drift
 // apart in name, default or help text.
 func (o *huntOptions) addFlags(fs *flag.FlagSet) {
-	fs.StringVar(&o.format, "format", "text", "output format: text|json|markdown")
+	fs.StringVar(&o.format, "format", "text", "output format: text|json|markdown|sarif")
+	fs.StringVar(&o.sarifPath, "sarif", "", "also write a SARIF 2.1.0 document to this file (any --format)")
 	fs.IntVar(&o.repeat, "repeat", probe.DefaultRepeatCount, "repeat count for -count")
 	fs.StringVar(&o.dir, "capsule-dir", "", "capsule directory (default <pkg>/.flakesmith)")
 	fs.IntVar(&o.seeds, "seeds", 0, "shuffle seed count (0 = default 12)")
@@ -51,6 +61,28 @@ func (o *huntOptions) addFlags(fs *flag.FlagSet) {
 	// witness below the verification threshold under race overhead — the flag
 	// would hide the flake instead of adding evidence.
 	fs.BoolVar(&o.race, "race", false, "verify the found witness once with -race (data race evidence)")
+	fs.StringVar(&o.polluterPkg, "polluter-pkg", "",
+		"suspect polluter package (dir or import path): enables cross-binary order reproduction (#6)")
+}
+
+// resolvePolluter turns --polluter-pkg into a single directory, once per run.
+// The module boundary is what makes import paths resolvable: like the CI log
+// of repro --from-json, this runs where `go list` can see the repo.
+func (o *huntOptions) resolvePolluter(ctx context.Context) error {
+	o.polluterDir = ""
+	if o.polluterPkg == "" {
+		return nil
+	}
+	dirs, err := gotest.ExpandPatterns(ctx, []string{o.polluterPkg})
+	if err != nil {
+		return err
+	}
+	if len(dirs) != 1 {
+		return domain.Wrap(domain.ErrUsage,
+			"--polluter-pkg must resolve to exactly one package directory, got %d", len(dirs))
+	}
+	o.polluterDir = dirs[0]
+	return nil
 }
 
 // scanner runs the probe registry over packages and writes the artifacts.
@@ -92,32 +124,59 @@ func newScanner(out IO, o huntOptions, only string) *scanner {
 	runner := gotest.NewCache(gotest.Budgeted{Inner: &gotest.Exec{}, Budget: budget}, 0)
 	// Order matters: cheap probe first. The registry comes from one place so
 	// adding a probe never requires touching the CLI.
-	registry := probe.NewRegistry(
+	probes := []probe.Probe{
 		probe.Repeat{Count: o.repeat},
 		probe.Order{Seeds: probe.SeedsN(o.seeds)},
 		probe.Parallel{},
 		probe.Env{},
-	)
+	}
+	if o.polluterDir != "" {
+		// The two-binary engine (#6) is last and opt-in: it is the most
+		// expensive probe and its search space is a whole foreign package.
+		probes = append(probes, probe.OrderCross{PolluterDir: o.polluterDir})
+	}
+	registry := probe.NewRegistry(probes...)
 	cwd, _ := os.Getwd()
 	return &scanner{o: o, out: out, registry: registry, runner: runner, budget: budget, only: only, cwd: cwd}
 }
 
 // emit renders or collects one capsule.
 func (s *scanner) emit(c domain.Capsule) error {
-	if s.o.format == "json" {
+	// The machine-readable formats are one document per run: they collect and
+	// write at flush, including on interrupted paths. A --sarif side file
+	// collects too, whichever format streams.
+	if s.o.format == "json" || s.o.format == "sarif" || s.o.sarifPath != "" {
 		s.collected = append(s.collected, c)
+	}
+	if s.o.format == "json" || s.o.format == "sarif" {
 		return nil
 	}
 	return writeCapsule(s.out, s.o.format, c)
 }
 
-// flush writes the single JSON document. Every path that produced capsules
-// calls it, including the error paths: a partial run still has findings.
+// flush writes the single document a machine-readable run owes its consumer.
+// Every path that produced capsules calls it, including the error paths: a
+// partial run still has findings.
 func (s *scanner) flush() error {
-	if s.o.format != "json" {
-		return nil
+	switch s.o.format {
+	case "json":
+		if err := report.JSONRun(s.out.Stdout, s.collected, s.budget.Runs(), s.budget.MaxRuns); err != nil {
+			return err
+		}
+	case "sarif":
+		if err := report.SARIF(s.out.Stdout, s.collected, Version); err != nil {
+			return err
+		}
 	}
-	return report.JSONRun(s.out.Stdout, s.collected, s.budget.Runs(), s.budget.MaxRuns)
+	if s.o.sarifPath != "" && s.o.format != "sarif" {
+		f, err := os.Create(s.o.sarifPath)
+		if err != nil {
+			return fmt.Errorf("sarif file: %w", err)
+		}
+		defer f.Close()
+		return report.SARIF(f, s.collected, Version)
+	}
+	return nil
 }
 
 // relDir is the package path as a command printed in the capsule can use it:
@@ -135,6 +194,15 @@ func (s *scanner) relDir(dir string) string {
 	// A directory outside ("../other/repo") is no more portable than an
 	// absolute path; relative to cwd always produces the right command.
 	return rel
+}
+
+// polluterRel is the --polluter-pkg directory in the same run-relative form
+// relDir produces; empty when the cross-binary engine (#6) was not enabled.
+func (s *scanner) polluterRel() string {
+	if s.o.polluterDir == "" {
+		return ""
+	}
+	return s.relDir(s.o.polluterDir)
 }
 
 // pkg scans one package directory.
@@ -222,7 +290,7 @@ func (s *scanner) pkg(ctx context.Context, pkgArg string) error {
 			note = raceNote
 		}
 
-		c := buildCapsule(res.Witness, dir, pkgFacts, relDir)
+		c := buildCapsule(res.Witness, dir, pkgFacts, relDir, s.polluterRel())
 		c.Note = note
 		store := capsule.NewStore(capsuleDir(s.o.dir, dir))
 		path, err := store.Write(c)
@@ -284,7 +352,7 @@ func writeCapsule(out IO, format string, c domain.Capsule) error {
 	case "text", "":
 		return report.Text(out.Stdout, c)
 	default:
-		return domain.Wrap(domain.ErrUsage, "unknown format %q (text|json|markdown)", format)
+		return domain.Wrap(domain.ErrUsage, "unknown format %q (text|json|markdown|sarif — sarif is a run format, see hunt)", format)
 	}
 }
 
@@ -327,6 +395,9 @@ func hunt(ctx context.Context, args []string, out IO) error {
 	fs.BoolVar(&writeBaseline, "write-baseline", false,
 		"write the ids found by this run to the baseline file (default .flakesmith/baseline.json)")
 	if err := parseFlags(fs, args); err != nil {
+		return err
+	}
+	if err := o.resolvePolluter(ctx); err != nil {
 		return err
 	}
 	pkgs := fs.Args()
@@ -544,20 +615,28 @@ func attemptInfos(res *probe.Result) []report.AttemptInfo {
 
 // buildCapsule assembles the artifact from the verified witness plus whatever
 // static evidence the AST scan can supply.
-func buildCapsule(w *domain.Witness, dir string, f facts.PkgFacts, relDir string) domain.Capsule {
+func buildCapsule(w *domain.Witness, dir string, f facts.PkgFacts, relDir, polluterRelDir string) domain.Capsule {
 	module := modulePath(dir)
 	commit, _ := gitState(dir)
 
 	c := baseCapsule(dir)
 	c.Target = domain.Target{Package: w.Victim.Package, RelDir: relDir, Victim: w.Victim.Name}
+	if pos, ok := f.TestPos[w.Victim.Name]; ok && pos.Line > 0 {
+		c.Target.VictimFile = filepath.Base(pos.File)
+		c.Target.VictimLine = pos.Line
+	}
+	if w.CrossBinary {
+		c.Target.PolluterRelDir = polluterRelDir
+	}
 	c.Kind = w.Kind
 	c.Witness = domain.Witness{
-		Kind:      w.Kind,
-		Victim:    w.Victim,
-		Polluters: w.Polluters,
-		Flags:     w.Flags,
-		EnvDiff:   w.EnvDiff,
-		Runs:      w.Runs,
+		Kind:        w.Kind,
+		Victim:      w.Victim,
+		Polluters:   w.Polluters,
+		Flags:       w.Flags,
+		EnvDiff:     w.EnvDiff,
+		Runs:        w.Runs,
+		CrossBinary: w.CrossBinary,
 	}
 	c.Observation = domain.Observation{
 		Runs:          w.Runs,
@@ -619,6 +698,22 @@ func reproCommand(c domain.Capsule) string {
 	dir := c.Target.RelDir
 	if dir == "" {
 		dir = "."
+	}
+
+	// A cross-binary witness (#6) is not a test file, it is a sequence of two
+	// `go test` processes. The command IS the reproduction contract: compile
+	// refuses these capsules, so this line is the permanent record.
+	if c.Witness.CrossBinary {
+		polluterDir := c.Target.PolluterRelDir
+		if polluterDir == "" {
+			polluterDir = dir
+		}
+		names := make([]string, 0, len(c.Witness.Polluters))
+		for _, p := range c.Witness.Polluters {
+			names = append(names, p.Name)
+		}
+		return fmt.Sprintf("go test %s -run '^(%s)$' -count=1 -parallel=1 && go test %s -run '^%s$' -count=1",
+			polluterDir, strings.Join(names, "|"), dir, c.Witness.Victim.Name)
 	}
 
 	var b strings.Builder

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/emrelab/flakesmith/internal/capsule"
@@ -25,10 +26,11 @@ import (
 // capsule is stale rather than wrong.
 func replayCmd(ctx context.Context, args []string, out IO) error {
 	var (
-		n      int
-		envKV  string
-		dir    string
-		pkgArg string
+		n           int
+		envKV       string
+		dir         string
+		pkgArg      string
+		polluterArg string
 	)
 	fs := flag.NewFlagSet("replay", flag.ContinueOnError)
 	fs.SetOutput(out.Stderr)
@@ -36,6 +38,7 @@ func replayCmd(ctx context.Context, args []string, out IO) error {
 	fs.StringVar(&envKV, "env", "", "KEY=VALUE for env flakes (the capsule does not store the value)")
 	fs.StringVar(&dir, "capsule-dir", "", "capsule directory (default .flakesmith)")
 	fs.StringVar(&pkgArg, "pkg", "", "package directory (default: the directory the capsule recorded)")
+	fs.StringVar(&polluterArg, "polluter-pkg", "", "polluter package directory (cross-binary capsules; default: the capsule's polluterRelDir)")
 	if err := parseFlags(fs, args); err != nil {
 		return err
 	}
@@ -47,6 +50,9 @@ func replayCmd(ctx context.Context, args []string, out IO) error {
 	c, err := capsule.NewStore(storeDir).Read(id)
 	if err != nil {
 		return domain.Wrap(domain.ErrUsage, "%s", err)
+	}
+	if c.Witness.CrossBinary {
+		return replayCross(ctx, c, pkgArg, storeDir, n, polluterArg, out)
 	}
 	if c.Status != domain.StatusConfirmed {
 		return domain.Wrap(domain.ErrUsage,
@@ -222,4 +228,90 @@ func replayTarget(pkgArg string, c domain.Capsule, storeDir string) (string, fac
 	return "", facts.PkgFacts{}, domain.Wrap(domain.ErrUsage,
 		"package containing test %s not found (tried: %s); specify it with --pkg",
 		c.Witness.Victim.Name, strings.Join(tried, ", "))
+}
+
+// replayCross replays a two-process witness (#6): stage 1 runs the shrunk
+// polluters in the polluter package, stage 2 runs the victim alone. Failed
+// means the VICTIM failed in stage 2 — the polluter suite failing for its own
+// reasons is not evidence about this flake.
+//
+// Every round re-runs both stages; results never come from the cache because
+// this runner is a bare Exec and each spec carries a round-stamped Source.
+func replayCross(ctx context.Context, c domain.Capsule, pkgArg, storeDir string, n int, polluterArg string, out IO) error {
+	if n <= 0 {
+		return domain.Wrap(domain.ErrUsage, "-n must be positive")
+	}
+	victimDir, _, err := replayTarget(pkgArg, c, storeDir)
+	if err != nil {
+		return err
+	}
+	polluterDir := polluterArg
+	if polluterDir == "" {
+		polluterDir = c.Target.PolluterRelDir
+	}
+	if polluterDir == "" {
+		return domain.Wrap(domain.ErrUsage,
+			"cross-binary capsule: pass the polluter package with --polluter-pkg")
+	}
+
+	names := make([]string, 0, len(c.Witness.Steps))
+	for _, s := range c.Witness.Steps {
+		if strings.HasPrefix(s.Label, domain.StepLabelPolluter) {
+			names = append(names, regexp.QuoteMeta(s.Func()))
+		}
+	}
+	if len(names) == 0 {
+		return domain.Wrap(domain.ErrUsage, "cross-binary capsule carries no polluter steps")
+	}
+
+	runner := &gotest.Exec{}
+	var failed int
+	for i := 0; i < n; i++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		res1, err := runner.Run(ctx, domain.RunSpec{
+			Package:  polluterDir,
+			RunRegex: "^(" + strings.Join(names, "|") + ")$",
+			Count:    1, Parallel: 1,
+			Source: fmt.Sprintf("replay-cross/%d/1", i),
+		})
+		if err != nil {
+			return err
+		}
+		if res1.BuildFailed {
+			return domain.Wrap(domain.ErrBuildFailed, "polluter package %s does not build", polluterDir)
+		}
+		res2, err := runner.Run(ctx, domain.RunSpec{
+			Package:  victimDir,
+			RunRegex: "^" + regexp.QuoteMeta(c.Witness.Victim.Name) + "$",
+			Count:    1, Parallel: 1,
+			Race:   c.Witness.Flags.Race,
+			Source: fmt.Sprintf("replay-cross/%d/2", i),
+		})
+		if err != nil {
+			return err
+		}
+		if res2.BuildFailed {
+			return domain.Wrap(domain.ErrBuildFailed, "victim package %s does not build", victimDir)
+		}
+		if res2.Failed(c.Witness.Victim.Name) {
+			failed++
+		}
+	}
+
+	_, _ = fmt.Fprintf(out.Stdout, "\ncapsule  : %s (%s, cross-binary)\n", c.ID, c.Kind)
+	_, _ = fmt.Fprintf(out.Stdout, "victim   : %s\n", c.Witness.Victim.Name)
+	_, _ = fmt.Fprintf(out.Stdout, "polluter : %s (%s)\n", strings.Join(names, ", "), polluterDir)
+	_, _ = fmt.Fprintf(out.Stdout, "run      : %d/%d reproduced\n", failed, n)
+	if failed == n && n > 0 {
+		_, _ = fmt.Fprintln(out.Stdout, "result   : deterministic")
+		return nil
+	}
+	if failed == 0 {
+		_, _ = fmt.Fprintln(out.Stdout, "result   : not reproduced — the pollution may already be fixed")
+		return domain.ErrNotReproduced
+	}
+	_, _ = fmt.Fprintf(out.Stdout, "result   : flaky (%d/%d) — probabilistic\n", failed, n)
+	return domain.Wrap(domain.ErrNotReproducible, "reproduced in %d/%d runs", failed, n)
 }
