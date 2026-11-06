@@ -18,6 +18,23 @@ const (
 	StatusProbabilistic CapsuleStatus = "probabilistic"
 )
 
+// VerifyStatus is the outcome of the last `compile --verify` for this capsule.
+// It exists because SKIP and false-green are verdicts a CI can misread: a suite
+// with one skipped regression prints `ok`. Only a real RED is "verified".
+type VerifyStatus string
+
+const (
+	// VerifyVerified the artifact ran and went RED: the flake is reproduced.
+	VerifyVerified VerifyStatus = "verified"
+	// VerifyGreenNotReproduced the artifact ran and stayed GREEN: the witness
+	// does not reproduce the flake, the artifact is worthless as written.
+	VerifyGreenNotReproduced VerifyStatus = "green-not-reproduced"
+	// VerifySkippedMissingEnv the env witness was inert (the variable was not
+	// set): verification did not happen. Not a success; not a failure to
+	// reproduce — simply not verified.
+	VerifySkippedMissingEnv VerifyStatus = "skipped-missing-env"
+)
+
 // Repo is the code state the run was performed against.
 type Repo struct {
 	Module string `json:"module"`
@@ -41,6 +58,16 @@ type Target struct {
 	// reproduce command is runnable from where they invoked flakesmith.
 	RelDir string `json:"relDir,omitempty"`
 	Victim string `json:"victim"`
+	// VictimFile is the base name of the file declaring the victim test
+	// (join with RelDir for the path), VictimLine its 1-based line — when the
+	// static scan saw the declaration. SARIF annotations need them; old
+	// capsules simply omit both (additive field, schema unchanged).
+	VictimFile string `json:"victimFile,omitempty"`
+	VictimLine int    `json:"victimLine,omitempty"`
+	// PolluterRelDir locates the polluter package of a cross-binary witness
+	// (#6), as the user can run it from the hunt's cwd. Empty on same-binary
+	// capsules — the victim's own directory hosts every step there.
+	PolluterRelDir string `json:"polluterRelDir,omitempty"`
 }
 
 // Observation is how often it failed across how many runs.
@@ -82,6 +109,10 @@ type Capsule struct {
 	Evidence    Evidence      `json:"evidence"`
 	Repro       Repro         `json:"repro"`
 	Status      CapsuleStatus `json:"status"`
+	// VerifyStatus records the verdict of the last `compile --verify`. Empty
+	// means never verified. Additive field (id and schema unaffected: this is
+	// metadata about the artifact, not about the witness).
+	VerifyStatus VerifyStatus `json:"verifyStatus,omitempty"`
 	// Note explains a non-confirmed status in one user-facing sentence
 	// ("budget exceeded: 1/1 runs") or annotates a confirmed capsule whose
 	// evidence is weaker than the status suggests ("not reproduced in the

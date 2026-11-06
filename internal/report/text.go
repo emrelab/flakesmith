@@ -23,8 +23,16 @@ func Text(w io.Writer, c domain.Capsule) error {
 		names := make([]string, len(v.Polluters))
 		for i, p := range v.Polluters {
 			names[i] = p.Name
+			// Cross-binary (#6): the polluter lives in another package — say
+			// which, or the report names a test that exists in three places.
+			if v.CrossBinary && p.Package != "" && p.Package != v.Victim.Package {
+				names[i] = p.Package + "." + p.Name
+			}
 		}
 		fmt.Fprintf(&b, "  polluter     : %s\n", strings.Join(names, ", "))
+	}
+	if v.CrossBinary {
+		b.WriteString("  witness      : cross-binary (two `go test` processes; the pollution crosses the process boundary — files, ports, cwd)\n")
 	}
 	if len(v.EnvDiff) > 0 {
 		fmt.Fprintf(&b, "  environment  : %s\n", strings.Join(v.EnvDiff, ", "))
@@ -45,8 +53,17 @@ func Text(w io.Writer, c domain.Capsule) error {
 	}
 
 	fmt.Fprintf(&b, "\n  reproduce:\n    %s\n", c.Repro.Command)
+	// The skip condition belongs where the human reads the reproduce block:
+	// without it an env regression that SKIPs looks verified-green in CI.
+	if c.Kind == domain.KindEnv && len(c.Witness.EnvDiff) > 0 {
+		fmt.Fprintf(&b, "  inert unless   : %s is set (the capsule stores the key, never the value)\n",
+			strings.Join(c.Witness.EnvDiff, ", "))
+	}
 	fmt.Fprintf(&b, "\n  capsule      : %s\n", c.ID)
 	fmt.Fprintf(&b, "  status       : %s\n", c.Status)
+	if c.VerifyStatus != "" {
+		fmt.Fprintf(&b, "  verification : %s\n", c.VerifyStatus)
+	}
 	// Note: the witness was verified but the evidence is weak at one point
 	// (e.g. it did not reproduce in a --race run). One line, this is what the user reads.
 	if c.Note != "" {

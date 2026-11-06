@@ -40,6 +40,12 @@ type Flags struct {
 type Step struct {
 	Label string `json:"label"` // "polluter/TestSeedDB"
 	Test  TestID `json:"-"`
+	// Package is the import path this step's test lives in. Only cross-binary
+	// witnesses (#6) set it: within one witness file every step shares the
+	// victim's binary, so the field would be redundant — and a step whose
+	// Package differs from the victim's tells renderers this is a two-process
+	// witness that no single test file can express.
+	Package string `json:"package,omitempty"`
 	// WrapParallel marks a step whose test does NOT call t.Parallel() itself.
 	// The parallel witness has to add the call for it, otherwise the steps stay
 	// serial and the witness proves nothing. A test that already calls
@@ -73,6 +79,12 @@ type Witness struct {
 	Seed      int64    `json:"seed,omitempty"`    // -shuffle seed for KindOrder
 	EnvDiff   []string `json:"envDiff,omitempty"` // key names only
 	Runs      int      `json:"runs"`              // verified over how many runs
+	// CrossBinary marks an order witness whose polluter runs in a SEPARATE
+	// `go test` process (#6): the pollution it proves survives the process
+	// boundary — files, ports, cwd — never in-memory globals. A witness file
+	// cannot express it, so compile refuses these capsules; replay and the
+	// capsule command run the two stages in sequence.
+	CrossBinary bool `json:"crossBinary,omitempty"`
 }
 
 // Minimal reports whether this is a verified minimal witness (at least one polluter and at least 2 runs).

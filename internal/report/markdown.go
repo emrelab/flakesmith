@@ -58,6 +58,14 @@ func Markdown(w io.Writer, c domain.Capsule) error {
 	if c.Repro.Command != "" {
 		fmt.Fprintf(&b, "\nReproduce:\n\n```sh\n%s\n```\n", c.Repro.Command)
 	}
+	// The skip condition rendered next to the command it gates (#8).
+	if c.Kind == domain.KindEnv && len(c.Witness.EnvDiff) > 0 {
+		fmt.Fprintf(&b, "\n*Inert unless* `%s` is set — the capsule stores the key, never the value.\n",
+			strings.Join(c.Witness.EnvDiff, "`, `"))
+	}
+	if c.VerifyStatus != "" {
+		fmt.Fprintf(&b, "\nVerification: `%s`.\n", c.VerifyStatus)
+	}
 	if c.Repro.GeneratedTest != "" {
 		fmt.Fprintf(&b, "\nPermanent regression test: `%s` (build tag `%s`).\n",
 			c.Repro.GeneratedTest, domain.PersistentBuildTag)

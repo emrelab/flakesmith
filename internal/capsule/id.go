@@ -27,6 +27,11 @@ func ID(w domain.Witness, module, commit string) string {
 	polluters := make([]string, len(w.Polluters))
 	for i, p := range w.Polluters {
 		polluters[i] = p.Name
+		if w.CrossBinary {
+			// Cross-binary (#6): the same test name in two packages is two
+			// different polluters — identity must say which one.
+			polluters[i] = p.Package + "." + p.Name
+		}
 	}
 	sort.Strings(polluters)
 	parts = append(parts, polluters...)
