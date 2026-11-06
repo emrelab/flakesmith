@@ -1,0 +1,121 @@
+name: release
+
+# Prebuilt binaries (issue #3): pushing a v* tag publishes one static binary
+# per platform plus a SHA256SUMS file as a GitHub Release. The action keeps
+# building from source as its fallback, so a missing or broken release never
+# blocks a consumer. workflow_dispatch runs the same builds and publishes
+# nothing — the way to prove the matrix before cutting a real tag.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      # One entry per release target. Each is built natively: cross-compiling
+      # from one box is possible but a native runner is the honest proof the
+      # target compiles. windows/arm64 is intentionally absent — no hosted
+      # runner ships it, and the action's source-build fallback covers it.
+      matrix:
+        include:
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+          - os: ubuntu-latest
+            goos: linux
+            goarch: arm64
+          - os: macos-latest
+            goos: darwin
+            goarch: amd64
+          - os: macos-latest
+            goos: darwin
+            goarch: arm64
+          - os: windows-latest
+            goos: windows
+            goarch: amd64
+    runs-on: ${{ matrix.os }}
+    # Windows runners default to pwsh; every script here is POSIX.
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+
+      # The binary must be able to name its own version: main.version is
+      # stamped from the tag (v0.2.0 -> 0.2.0), the same ldflags the Makefile
+      # uses. A dry run has no tag, so git describe stands in.
+      - name: version
+        id: version
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=$(git describe --tags --always --dirty)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          suffix=""
+          [ "$GOOS" = windows ] && suffix=".exe"
+          out="dist/flakesmith-$VERSION-$GOOS-$GOARCH$suffix"
+          CGO_ENABLED=0 go build -trimpath \
+            -ldflags "-s -w -X main.version=$VERSION" \
+            -o "$out" ./cmd/flakesmith
+          # Run the version stamp back only on the host platform: a darwin
+          # amd64 binary on an arm64 runner would need Rosetta, which the
+          # macOS images do not promise.
+          if [ "$GOOS" = "$(go env GOHOSTOS)" ] && [ "$GOARCH" = "$(go env GOHOSTARCH)" ]; then
+            "./$out" version | grep -q "flakesmith $VERSION"
+          else
+            echo "cross build: skipping the run check for $GOOS/$GOARCH"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/flakesmith-*
+
+  publish:
+    # Tag pushes only. A dispatched dry run has no tag to point a release at,
+    # and inventing one from a branch name would publish an identity nothing
+    # built. The build job above already proved the matrix.
+    if: github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: binary-*
+          path: dist
+          merge-multiple: true
+
+      # One line per binary: "<sha256>  flakesmith-<version>-<os>-<arch>".
+      # The action verifies the binary it downloads against exactly this file.
+      - name: checksums
+        run: (cd dist && sha256sum flakesmith-* > SHA256SUMS)
+
+      - name: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --verify-tag \
+            --generate-notes \
+            --title "flakesmith $GITHUB_REF_NAME"
