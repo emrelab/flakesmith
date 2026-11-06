@@ -21,6 +21,10 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   alone passes, the fallback deadline is never paid when a sibling was
   selected, and a solo run costs no more than the serial baseline (the guard
   that fails on the old polling design: 2.27s vs 0.25s).
+- CI timeouts back to measured values: the race step 20m → 15m and the
+  `-count=3` sweep 40m → 30m. Both bumps existed only to absorb the
+  `parallel-race` window; with it gone the windows job runs the race step in
+  4m06s (was 9m20s) and the sweep in 13m02s (was 24m04s).
 
 ## [0.2.0] — 2026-11-06
 

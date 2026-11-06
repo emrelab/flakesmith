@@ -44,20 +44,22 @@ jobs:
         run: go vet ./...
 
       - name: test
-        # Explicit timeout: the default 10m was hit by a fixture widening
-        # (@ b852f86's parent); a timing-sensitive suite should not live at
-        # the mercy of the go test default.
-        run: go test -timeout 20m -race ./...
+        # Explicit timeout, not the 10m default: this suite spawns real
+        # `go test` subprocesses, so its wall time follows the runner's disk
+        # and CPU, not the assertion count. Measured on the slowest runner
+        # (windows-latest): 4m06s — 15m is ~3.5x headroom.
+        run: go test -timeout 15m -race ./...
 
       # The tool itself must not produce flakes. A state leak is caught here.
       # Per-PR sweep is -count=3: the full -count=10 sweep roughly triples
       # wall time on every PR for marginal recall; nightly.yml carries it.
-      # Default 10m test timeout is too small: the cli integration tests spawn
-      # (40m, not 25m: the parallel-race window widened for issue #12 triples
-      # that test's runtime; the windows full sweep now lands near 25m).
-      # real `go test` subprocesses.
       - name: test (repeat, flake hunt)
-        run: go test -timeout 40m -count=3 ./...
+        # Same reasoning one sweep deeper: -count=3 multiplies the subprocess
+        # spawns. Measured on windows-latest: 13m02s, 30m is ~2.3x headroom.
+        # (Before the parallel-race fixture stopped paying a fixed window this
+        # step needed 40m — issue #12. If it creeps back up, suspect a fixture
+        # that sleeps, not a timeout that is too small.)
+        run: go test -timeout 30m -count=3 ./...
 
       - name: fixtures
         run: make fixtures
