@@ -98,8 +98,18 @@ jobs:
       - name: hunt our own packages
         run: |
           set -uo pipefail
-          ./flakesmith hunt ./... --fail-on-flake --budget 200 --timeout 10m
-          rc=$?
+          # --short: our own cli package carries heavy integration tests that
+          # skip themselves under testing.Short(); without the flag the
+          # shuffle scan re-runs them per seed and the PR budget is spent on
+          # tests the next CI step already covers in full. Nightly runs the
+          # hunt without --short — the comment below must stay true.
+          # || rc=$? on purpose: the default shell is bash -e, and a bare
+          # failing line kills the script BEFORE rc can be read. The guard
+          # below was dead code until that was noticed (self-hunt @ d92e895).
+          rc=0
+          # 600 runs: the sweep's run count is deterministic; measured on the
+          # current tree at just under that. 15m wall for slower runners.
+          ./flakesmith hunt ./... --fail-on-flake --short --budget 600 --timeout 15m || rc=$?
           if [ "$rc" -eq 4 ]; then
             echo "::warning::self-hunt ran out of budget — inconclusive, nightly carries the sweep"
             exit 0

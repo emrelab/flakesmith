@@ -33,3 +33,36 @@ jobs:
           go-version: '1.26'
       - name: test (full repeat sweep)
         run: go test -timeout 45m -count=10 ./...
+
+  # The ci.yml self-hunt runs with --short so a PR budget is not spent on
+  # integration tests. This is the sweep that promise deferred to: no
+  # --short, a generous wall budget, the full package set — integration
+  # tests included. An order-dependent flake hiding in a slow test is the
+  # nightly's to catch, same as a leak on the 7th repeat.
+  self-hunt-full:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+      - name: build
+        run: make build
+      - name: hunt our own packages (full)
+        run: |
+          set -uo pipefail
+          rc=0
+          ./flakesmith hunt ./... --fail-on-flake --budget 1000 --timeout 40m || rc=$?
+          if [ "$rc" -eq 4 ]; then
+            echo "::warning::full self-hunt ran out of budget — raise --budget/--timeout or file it"
+            exit 0
+          fi
+          exit "$rc"
+      - name: save capsules
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-hunt-capsules
+          path: "**/.flakesmith/*.json"
+          if-no-files-found: ignore
+          retention-days: 14
