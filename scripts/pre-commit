@@ -48,7 +48,13 @@ pkgs=$(printf '%s\n' "$staged" | grep '\.go$' | grep -v '^testdata/' | while IFS
 fx=$(printf '%s\n' "$staged" | sed -n 's|^testdata/fixtures/\([^/]*\)/.*|\1|p' | sort -u)
 
 # Scope grows when contract files were touched.
-if printf '%s\n' "$staged" | grep -qE '^(go\.mod|go\.sum|Makefile|\.github/workflows/|scripts/pre-commit)$'; then
+#
+# The workflow alternative must NOT be anchored with `$`: a path under
+# .github/workflows/ is a FILE (ci.yml, nightly.yml), so `^\.github/workflows/$`
+# matched nothing and a CI-only commit skipped the suite entirely — the one
+# change where the gate earns its keep. Verified: `printf '.github/workflows/ci.yml'`
+# must match here.
+if printf '%s\n' "$staged" | grep -qE '^(go\.mod|go\.sum|Makefile|scripts/pre-commit)$|^\.github/workflows/'; then
   pkgs="./..."
 fi
 

@@ -25,6 +25,10 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   `-count=3` sweep 40m → 30m. Both bumps existed only to absorb the
   `parallel-race` window; with it gone the windows job runs the race step in
   4m06s (was 9m20s) and the sweep in 13m02s (was 24m04s).
+- Pre-commit gate: a commit touching `.github/workflows/` widens the gate to
+  the full suite again. The pattern's `$` anchor made `^\.github/workflows/$`
+  match only a directory name, which is never a staged file, so CI-only
+  commits — exactly the ones the gate exists for — ran build+vet alone.
 
 ## [0.2.0] — 2026-11-06
 
