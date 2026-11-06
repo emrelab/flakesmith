@@ -50,9 +50,11 @@ jobs:
       # Per-PR sweep is -count=3: the full -count=10 sweep roughly triples
       # wall time on every PR for marginal recall; nightly.yml carries it.
       # Default 10m test timeout is too small: the cli integration tests spawn
+      # (40m, not 25m: the parallel-race window widened for issue #12 triples
+      # that test's runtime; the windows full sweep now lands near 25m).
       # real `go test` subprocesses.
       - name: test (repeat, flake hunt)
-        run: go test -timeout 25m -count=3 ./...
+        run: go test -timeout 40m -count=3 ./...
 
       - name: fixtures
         run: make fixtures
