@@ -194,7 +194,7 @@ class, it names the class it cannot see.
 ## GitHub Actions
 
 ```yaml
-- uses: emrelab/flakesmith@v0.1.0
+- uses: emrelab/flakesmith@v0.2.0
   with:
     paths: ./...
     format: markdown
@@ -204,7 +204,7 @@ class, it names the class it cannot see.
 
 The action prefers the prebuilt binary of its own tag (verified against
 `SHA256SUMS`) and falls back to building its own source from
-`GITHUB_ACTION_PATH`: `@v0.1.0` says which version is running, with no waiting
+`GITHUB_ACTION_PATH`: `@v0.2.0` says which version is running, with no waiting
 on the proxy for a tag. Go 1.24+ is required (`actions/setup-go` is on you).
 
 `flakesmith init` writes this file into your repo (it never overwrites an

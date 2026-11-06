@@ -1,7 +1,7 @@
 # FlakeSmith — Architecture
 
 **Version:** 1.1 · **Date:** November 1, 2026 · **Last synced:** November 4, 2026
-**Status:** Implemented and published — `v0.1.0` at github.com/emrelab/flakesmith.
+**Status:** Implemented and published — `v0.2.0` at github.com/emrelab/flakesmith.
 
 This document describes not "what we will do" but **how we will build it**: package boundaries, types, algorithms, Go-specific traps, and task order. The product definition is not repeated here.
 

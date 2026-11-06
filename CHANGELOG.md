@@ -4,7 +4,7 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.2.0] — 2026-11-06
 
 ### Changed
 - `go.mod` floor lowered from 1.26 to 1.24 (measured: `t.Chdir` is the newest
@@ -61,5 +61,6 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   `init`; four probe classes (repeat, order, parallel, env); capsules;
   GitHub Action; fixtures for every flake class; zero external dependencies.
 
-[Unreleased]: https://github.com/emrelab/flakesmith/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/emrelab/flakesmith/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/emrelab/flakesmith/releases/tag/v0.2.0
 [0.1.0]: https://github.com/emrelab/flakesmith/releases/tag/v0.1.0
