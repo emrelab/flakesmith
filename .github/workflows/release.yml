@@ -84,7 +84,7 @@ jobs:
             echo "cross build: skipping the run check for $GOOS/$GOARCH"
           fi
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: binary-${{ matrix.goos }}-${{ matrix.goarch }}
           path: dist/flakesmith-*
