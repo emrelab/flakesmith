@@ -53,6 +53,16 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   property tests (shrink preserves the predicate, stays a subset, is
   idempotent and 1-wise-minimal), and benchmarks for the parser, ddmin and
   the scanner at 25/100/400-test scale.
+- `hunt/repro --short`: run the whole scan with `go test -short`. Operator
+  choice on the runner, not a spec property — for repos whose integration
+  tests honor `testing.Short()`, so a shuffle scan does not re-run them per
+  seed. The PR self-hunt uses it; nightly added a full unshorted sweep.
+
+### Fixed
+- CI self-hunt: the budget guard was dead code — GitHub's default shell is
+  `bash -e`, so a non-zero hunt exit killed the step before `rc` was read
+  (surfaced as self-hunt @ d92e895). Guard rewritten (`|| rc=$?`) and the
+  PR sweep now runs `--short`, with the unshorted sweep moved to nightly.
 
 ## [0.1.0] — 2026-11-04
 
