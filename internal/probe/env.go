@@ -126,19 +126,25 @@ func (p Env) verify(ctx context.Context, r gotest.Runner, base, variant domain.R
 }
 
 // envKeys is the ordered set of env variables the victim (or its package) reads
-// literally, filtered to those we have candidate values for.
+// literally, filtered to those we have candidate values for. Test-file reads
+// come first, application-file reads second: a variable the package code reads
+// can still flip the test's outcome (the witness runs the real `go test`), but
+// app code also reads dozens of variables no test outcome depends on, so they
+// must not spend the probe's budget before the local keys.
 func envKeys(tgt Target) []string {
 	seen := map[string]bool{}
 	var out []string
-	for _, k := range tgt.Facts.EnvReads {
-		if k == "" || seen[k] {
-			continue
+	for _, group := range [][]string{tgt.Facts.EnvReads, tgt.Facts.AppEnvReads} {
+		for _, k := range group {
+			if k == "" || seen[k] {
+				continue
+			}
+			if _, ok := tgt.Facts.EnvValues[k]; !ok {
+				continue
+			}
+			seen[k] = true
+			out = append(out, k)
 		}
-		if _, ok := tgt.Facts.EnvValues[k]; !ok {
-			continue
-		}
-		seen[k] = true
-		out = append(out, k)
 	}
 	return out
 }

@@ -101,3 +101,57 @@ func hasEnv(s domain.RunSpec, want string) bool {
 	}
 	return false
 }
+
+// #2A: a variable the test never reads itself — the package's application code
+// reads it — is still a candidate: the witness runs the real `go test`, so an
+// indirect read flips the outcome just the same. But app code is noisier, so
+// when BOTH sides flip, the test-local key must be the finding.
+func TestEnvTriesAppKeysAfterTestKeys(t *testing.T) {
+	tgt := envTarget(t.TempDir())
+	tgt.Facts.AppEnvReads = []string{"DEPLOY_TARGET"}
+	tgt.Facts.EnvValues["DEPLOY_TARGET"] = []string{"staging"}
+
+	// Both values flip the test (baseline fails, either variable set passes).
+	fake := &gotest.Fake{RunFn: func(s domain.RunSpec) (*domain.RunResult, error) {
+		if hasEnv(s, "FIXTURE_MODE=ci") || hasEnv(s, "DEPLOY_TARGET=staging") {
+			return gotest.Result(s, map[string]domain.Status{"TestNeedsEnv": domain.StatusPass}), nil
+		}
+		return gotest.Result(s, map[string]domain.Status{"TestNeedsEnv": domain.StatusFail}), nil
+	}}
+
+	w, err := probe.Env{}.Probe(context.Background(), tgt, fake)
+	if err != nil {
+		t.Fatalf("a witness was expected: %v", err)
+	}
+	if len(w.EnvDiff) != 1 || w.EnvDiff[0] != "FIXTURE_MODE" {
+		t.Errorf("test-local key must win the candidate race, EnvDiff = %v", w.EnvDiff)
+	}
+}
+
+// An app-only key (no literal read in any _test.go file) must still make the
+// probe applicable and produce a witness: this is exactly the env flake the
+// test-file-only scan used to miss.
+func TestEnvWitnessFromAppOnlyKey(t *testing.T) {
+	tgt := envTarget(t.TempDir())
+	tgt.Facts.EnvReads = nil
+	tgt.Facts.AppEnvReads = []string{"DEPLOY_TARGET"}
+	tgt.Facts.EnvValues = map[string][]string{"DEPLOY_TARGET": {"staging"}}
+
+	if !(probe.Env{}).Applicable(tgt) {
+		t.Fatal("an app-file env key must make the env probe applicable")
+	}
+	fake := &gotest.Fake{RunFn: func(s domain.RunSpec) (*domain.RunResult, error) {
+		if hasEnv(s, "DEPLOY_TARGET=staging") {
+			return gotest.Result(s, map[string]domain.Status{"TestNeedsEnv": domain.StatusFail}), nil
+		}
+		return gotest.Result(s, map[string]domain.Status{"TestNeedsEnv": domain.StatusPass}), nil
+	}}
+
+	w, err := probe.Env{}.Probe(context.Background(), tgt, fake)
+	if err != nil {
+		t.Fatalf("a witness was expected: %v", err)
+	}
+	if len(w.EnvDiff) != 1 || w.EnvDiff[0] != "DEPLOY_TARGET" {
+		t.Errorf("EnvDiff = %v, want [DEPLOY_TARGET]", w.EnvDiff)
+	}
+}
