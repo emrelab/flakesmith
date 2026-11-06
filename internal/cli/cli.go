@@ -101,7 +101,7 @@ func Execute(ctx context.Context, args []string, out IO) int {
 // in Execute. Folding everything into ErrUsage would report `hunt --help`
 // to CI as exit 2, "the command is broken".
 func parseFlags(fs *flag.FlagSet, args []string) error {
-	if err := fs.Parse(reorderFlags(args)); err != nil {
+	if err := fs.Parse(reorderFlags(fs, args)); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return err
 		}

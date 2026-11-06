@@ -37,6 +37,7 @@ type huntOptions struct {
 	verbose     bool
 	failOnFlake bool
 	race        bool
+	short       bool
 	// polluterPkg is the user-typed suspect for the two-binary engine (#6);
 	// polluterDir is it resolved, empty when the flag is absent.
 	polluterPkg string
@@ -61,6 +62,11 @@ func (o *huntOptions) addFlags(fs *flag.FlagSet) {
 	// witness below the verification threshold under race overhead — the flag
 	// would hide the flake instead of adding evidence.
 	fs.BoolVar(&o.race, "race", false, "verify the found witness once with -race (data race evidence)")
+	// short is the operator's choice: every `go test` runs with -short.
+	// Hunting a repo whose integration tests honor testing.Short() would
+	// otherwise burn the wall budget re-running them once per shuffle seed
+	// (self-hunt @ d92e895 learned this the expensive way).
+	fs.BoolVar(&o.short, "short", false, "scan with -short (skip the target's short-skipping tests)")
 	fs.StringVar(&o.polluterPkg, "polluter-pkg", "",
 		"suspect polluter package (dir or import path): enables cross-binary order reproduction (#6)")
 }
@@ -121,7 +127,7 @@ func newScanner(out IO, o huntOptions, only string) *scanner {
 	budget := policy.New(o.budget, o.timeout)
 	// Cache: the shuffle scan is paid once per package, not per test.
 	// 23s -> a few seconds on a 3-test fixture; 10x difference at 30 tests.
-	runner := gotest.NewCache(gotest.Budgeted{Inner: &gotest.Exec{}, Budget: budget}, 0)
+	runner := gotest.NewCache(gotest.Budgeted{Inner: &gotest.Exec{Short: o.short}, Budget: budget}, 0)
 	// Order matters: cheap probe first. The registry comes from one place so
 	// adding a probe never requires touching the CLI.
 	probes := []probe.Probe{
@@ -757,14 +763,19 @@ func reproCommand(c domain.Capsule) string {
 // Go's flag package stops at the first non-flag argument, so `hunt . -v` would
 // silently treat -v as a package. Users type flags after the target constantly;
 // a usage error there reads as a bug in the tool, not in their command.
-func reorderFlags(args []string) []string {
+//
+// Whether a flag swallows the next token is asked of the FlagSet itself
+// (IsBoolFlag), never a hardcoded list: the old list silently misparsed every
+// new boolean flag (`--short --budget 200` handed "200" to -short and left
+// --budget facing --timeout — found when self-hunt's CI step added --short).
+func reorderFlags(fs *flag.FlagSet, args []string) []string {
 	var flags, positional []string
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		if strings.HasPrefix(a, "-") && a != "-" {
 			flags = append(flags, a)
 			// A flag written as "-name value" takes the next token with it.
-			if !strings.Contains(a, "=") && i+1 < len(args) && takesValue(a) {
+			if !strings.Contains(a, "=") && i+1 < len(args) && takesValue(fs, a) {
 				i++
 				flags = append(flags, args[i])
 			}
@@ -775,18 +786,20 @@ func reorderFlags(args []string) []string {
 	return append(flags, positional...)
 }
 
-// takesValue reports whether the flag needs a following argument (the boolean
-// flags of hunt do not).
-func takesValue(flag string) bool {
-	name := strings.TrimLeft(flag, "-")
-	if i := strings.Index(name, "="); i >= 0 {
+// takesValue reports whether the flag needs a following argument. Boolean
+// flags and unknown names (flag.Parse will produce the usage error) do not
+// consume the next token.
+func takesValue(fs *flag.FlagSet, name string) bool {
+	trimmed := strings.TrimLeft(name, "-")
+	if i := strings.Index(trimmed, "="); i >= 0 {
 		return false
 	}
-	switch name {
-	case "v", "verbose", "h", "help", "race", "fail-on-flake", "changed", "write-baseline":
-		return false
+	f := fs.Lookup(trimmed)
+	if f == nil {
+		return false // unknown flag: reorder it verbatim; Parse reports it
 	}
-	return true
+	bf, ok := f.Value.(interface{ IsBoolFlag() bool })
+	return !ok || !bf.IsBoolFlag()
 }
 
 // targetSourceFile picks the file the regression test is named after: the file

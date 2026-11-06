@@ -136,7 +136,9 @@ ever list scans that actually ran.
 
 Shared flags: `--format text|json|markdown|sarif` · `--budget N` · `--timeout 10m` ·
 `--seeds N` · `--repeat N` · `--capsule-dir DIR` · `--fail-on-flake` · `--race`
-· `-v` · `--debug` (internal error detail). `hunt` also takes `--changed` ·
+· `-v` · `--debug` (internal error detail) · `--short` (scan with `-short`:
+the target's own short-skipping tests do not spend the budget). `hunt` also
+takes `--changed` ·
 `--base REF` · `--baseline FILE` · `--write-baseline` · `--polluter-pkg PKG`
 (cross-binary suspect, see below) · `--sarif FILE` (write SARIF 2.1.0 alongside
 any format — one hunt feeds both the job summary and code scanning). `compile`

@@ -29,6 +29,13 @@ type Runner interface {
 type Exec struct {
 	// GoBin overrides the go binary ("" -> "go" from PATH).
 	GoBin string
+	// Short appends -short to every invocation. This is an OPERATOR choice,
+	// not a spec property, so it lives on the runner instead of RunSpec: a
+	// hunt run (--short) scans packages under the shortened test set, which
+	// is how self-hunt stays meaningful on repos whose integration tests
+	// declare testing.Short(). The whole run shares one Exec configuration,
+	// so cached and live results inside one hunt stay consistent.
+	Short bool
 }
 
 func (e *Exec) goBin() string {
@@ -78,6 +85,9 @@ func (e *Exec) Run(ctx context.Context, spec domain.RunSpec) (*domain.RunResult,
 	}
 	if len(spec.Tags) > 0 {
 		args = append(args, "-tags", strings.Join(spec.Tags, ","))
+	}
+	if e.Short {
+		args = append(args, "-short")
 	}
 	args = append(args, ".")
 

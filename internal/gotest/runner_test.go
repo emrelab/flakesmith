@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -177,4 +178,46 @@ func writeFile(t *testing.T, path, content string) {
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// TestExecShortFlag pins the operator-level -short plumbing with a fake go
+// binary that records its arguments: --short (Exec.Short) must reach the
+// go command on every invocation, and must not when the flag is off. The
+// runner is the only place that builds go arguments, so this single test
+// covers every hunt/repro path.
+func TestExecShortFlag(t *testing.T) {
+	dir := t.TempDir()
+	argsFile := filepath.Join(dir, "args.txt")
+	shim := filepath.Join(dir, "go")
+	script := "#!/bin/sh\necho \"$@\" > " + shellQuote(argsFile) +
+		"\nprintf '%s\\n' '{\"Action\":\"pass\",\"Package\":\"shim\"}'\n"
+	if err := os.WriteFile(shim, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range []struct {
+		short bool
+		want  bool
+	}{{true, true}, {false, false}} {
+		if err := os.Remove(argsFile); err != nil && !os.IsNotExist(err) {
+			t.Fatal(err)
+		}
+		e := &Exec{GoBin: shim, Short: tc.short}
+		if _, err := e.Run(context.Background(), domain.RunSpec{Package: dir, Timeout: 30 * time.Second}); err != nil {
+			t.Fatalf("Short=%v: Run: %v", tc.short, err)
+		}
+		data, err := os.ReadFile(argsFile)
+		if err != nil {
+			t.Fatalf("Short=%v: args not recorded: %v", tc.short, err)
+		}
+		has := strings.Contains(string(data), "-short")
+		if has != tc.want {
+			t.Errorf("Short=%v: args contain -short=%v, want %v (%q)", tc.short, has, tc.want, data)
+		}
+	}
+}
+
+// shellQuote keeps the shim script independent of tempdir path quirks.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
