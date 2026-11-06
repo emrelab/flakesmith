@@ -4,6 +4,24 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- `parallel-race` fixture no longer times out into a false "no overlap": the
+  barrier is a channel closed by the second arriver (the first wakes in
+  microseconds) instead of a 5ms poll of a counter for a fixed 2s. The 30s
+  fallback deadline is skipped when the run's `-test.run` cannot select a
+  sibling, so the tool's solo/verification passes never pay it. The victim is
+  fixed by name (`TestParallelBeta`), so arrival order no longer decides which
+  test fails — the witness verification that reported "2/3" on loaded windows
+  (issue #12) is now deterministic. `hunt` on this fixture: 56s → 6s, every
+  witness run 2.1s → instant.
+- New `TestParallelRaceFixtureContract` asserts that instrument directly: the
+  serial run passes, the overlapped run fails on the victim only, the victim
+  alone passes, the fallback deadline is never paid when a sibling was
+  selected, and a solo run costs no more than the serial baseline (the guard
+  that fails on the old polling design: 2.27s vs 0.25s).
+
 ## [0.2.0] — 2026-11-06
 
 ### Changed
