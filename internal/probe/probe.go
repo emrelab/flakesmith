@@ -82,6 +82,7 @@ type Attempt struct {
 // Run applies probes in order and returns the first verified witness.
 func (r *Registry) Run(ctx context.Context, tgt Target, runner gotest.Runner) (*Result, error) {
 	res := &Result{}
+	var refusal error // a probe that found the shape but cannot express it (#6)
 	for _, p := range r.probes {
 		if err := ctx.Err(); err != nil {
 			return res, err
@@ -103,6 +104,15 @@ func (r *Registry) Run(ctx context.Context, tgt Target, runner gotest.Runner) (*
 			if isNotReproduced(err) {
 				continue
 			}
+			// A probe that found the shape but cannot express it (cross-clause
+			// order, #6) must not veto the probes after it: the two-binary
+			// engine (OrderCross) can express exactly that finding. The refusal
+			// is remembered — if nothing else reproduces, it is still the
+			// honest final answer and the exit code, never "no flake".
+			if errorsIs(err, domain.ErrUnsupportedTest) {
+				refusal = err
+				continue
+			}
 			return res, err // real failure (build error, budget, ctx) stops the hunt
 		}
 		if w == nil {
@@ -110,6 +120,9 @@ func (r *Registry) Run(ctx context.Context, tgt Target, runner gotest.Runner) (*
 		}
 		res.Witness = w
 		return res, nil
+	}
+	if refusal != nil {
+		return res, refusal
 	}
 	return res, ErrNotReproduced
 }
