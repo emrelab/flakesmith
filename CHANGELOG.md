@@ -33,7 +33,7 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   the capsule's `verifyStatus`, and exits 3 unless the artifact actually
   reproduced the red — a skipped run can no longer read as a green
   verification in CI.
-- Env detection (#2): `os.Getenv`/`os.LookupEnv` reads in the package's
+- Env detection: `os.Getenv`/`os.LookupEnv` reads in the package's
   non-test sources are collected as app-level evidence and probed after the
   test-local keys — a test that consumes an env var through application
   code is now reachable.
