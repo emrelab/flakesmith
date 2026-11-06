@@ -1,6 +1,8 @@
 package parallelrace
 
 import (
+	"flag"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -39,6 +41,22 @@ var (
 	maxActive int
 )
 
+// parallelWidth reads the parallelism the test binary itself was started
+// with (the -test.parallel flag Go always passes). -parallel=1 means no
+// sibling can ever overlap, so the hold is pointless — this keeps the
+// sequential probe path at its old, free cost.
+func parallelWidth() int {
+	f := flag.Lookup("test.parallel")
+	if f == nil {
+		return 1
+	}
+	n, err := strconv.Atoi(f.Value.String())
+	if err != nil || n < 1 {
+		return 1
+	}
+	return n
+}
+
 func enter(t *testing.T) {
 	t.Helper()
 
@@ -53,8 +71,14 @@ func enter(t *testing.T) {
 	}
 	mu.Unlock()
 
-	if seen == 1 {
+	if seen == 1 && parallelWidth() > 1 {
 		// First in: hold the door open for a late sibling.
+		//
+		// Only when the run can actually deliver a sibling: with
+		// -parallel=1 no second test exists to arrive, and holding would
+		// charge overlapWait to every sequential run — the shrinking loop
+		// and the race confirmation run dozens of them, and the -race CI
+		// step timed out on that arithmetic.
 		deadline := time.Now().Add(overlapWait)
 		for time.Now().Before(deadline) {
 			mu.Lock()
