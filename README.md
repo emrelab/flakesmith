@@ -31,6 +31,14 @@ Changing the order requires a temporary witness file, because in Go
 changes nothing (verified, Go 1.26.2). Zero external dependencies: one binary,
 stdlib only.
 
+## Install
+
+Prebuilt static binaries ship with every [release](https://github.com/emrelab/flakesmith/releases):
+linux and darwin (amd64/arm64), windows (amd64), each published with a
+`SHA256SUMS` file. From source stays the default: `go install
+github.com/emrelab/flakesmith/cmd/flakesmith@latest` — and it is also the
+fallback the GitHub Action uses when no prebuilt binary fits its ref.
+
 ## First 5 minutes
 
 ```sh
@@ -105,9 +113,14 @@ their order-dependent test and hunted `./log` there. The suite passed clean on
 our machine — their pollution needed a wider run context than the package
 replay produces. Reported as-is; no witness claimed.
 
-0 false positives across all seven. Hunting ≥2 confirmed real-world
-`polluter→victim` pairs is the tracked next milestone
-([#1](https://github.com/emrelab/flakesmith/issues/1)) — this table will only
+Across all seven scans: **zero findings, so zero false findings.** We state it
+that way on purpose — seven scans that emitted nothing do not measure a false
+positive *rate*; they only show the hunter stayed quiet on healthy code. Every
+witness flakesmith does emit must deterministically replay (that is the
+contract the capsule carries), and a rate will be quoted only once real
+witnesses exist.
+Hunting ≥2 confirmed real-world `polluter→victim` pairs is the tracked next
+milestone ([#1](https://github.com/emrelab/flakesmith/issues/1)) — this table will only
 ever list scans that actually ran.
 
 ## Commands
@@ -115,17 +128,24 @@ ever list scans that actually ran.
 | Command | What it does | Runs tests? |
 |---|---|---|
 | `hunt <pkg...>` | scans packages, classifies, writes capsules | ✅ |
-| `repro <pkg> [Test]` | shrinks one known suspect (the budget goes to a single test) | ✅ |
+| `repro <pkg> [Test]` | shrinks one known suspect (the budget goes to a single test); `--from-json FILE\|-` takes a failed `go test -json` log instead of typing suspects | ✅ |
 | `compile [id] [--verify]` | generates a permanent regression test from a capsule; `--verify` runs the artifact once | with `--verify` |
 | `replay [id]` | runs the witness N times, verifies determinism | ✅ |
 | `explain [id]` | renders a capsule as a text/JSON/markdown report | ❌ |
 | `init [dir]` | writes a `.github/workflows/flakesmith.yml` scaffold | ❌ |
 
-Shared flags: `--format text|json|markdown` · `--budget N` · `--timeout 10m` ·
+Shared flags: `--format text|json|markdown|sarif` · `--budget N` · `--timeout 10m` ·
 `--seeds N` · `--repeat N` · `--capsule-dir DIR` · `--fail-on-flake` · `--race`
 · `-v` · `--debug` (internal error detail). `hunt` also takes `--changed` ·
-`--base REF` · `--baseline FILE` · `--write-baseline`. `compile` also takes
-`--pkg DIR`, `--print`, `--dry-run` and `--verify`.
+`--base REF` · `--baseline FILE` · `--write-baseline` · `--polluter-pkg PKG`
+(cross-binary suspect, see below) · `--sarif FILE` (write SARIF 2.1.0 alongside
+any format — one hunt feeds both the job summary and code scanning). `compile`
+also takes `--pkg DIR`, `--print`, `--dry-run` and `--verify`.
+
+`compile --verify` keeps three verdicts apart — `verified` (the red reproduced),
+`green-not-reproduced` and `skipped-missing-env` — records the one it got in
+the capsule's `verifyStatus`, and exits 3 unless the artifact actually turned
+red. A skipped run is never a green verification.
 
 `--race` never narrows the search: the witness is found without race, then
 verified once with `-race`. If it does not reproduce, the capsule's `"race"`
@@ -148,9 +168,9 @@ CI scripts bind to these; no path fails silently with 0.
 | `0` | clean scan (`hunt`), or a flake was found (gate off) |
 | `1` | flake found (`--fail-on-flake`) |
 | `2` | usage error |
-| `3` | `repro`: the requested test did not reproduce within budget; `compile --verify`: the generated test stayed green |
+| `3` | `repro`: the requested test did not reproduce within budget; `compile --verify`: the artifact stayed green **or was skipped for a missing env var** |
 | `4` | budget exceeded (partial capsule written) |
-| `5` | unsupported form (different test binary) |
+| `5` | unsupported form (pollution that no single-binary witness can express — e.g. an in-memory global across two test binaries) |
 | `6` | package does not build |
 | `10` | internal error (detail with `--debug`) |
 | `130` | cancelled (SIGINT); half-written witness files deleted |
@@ -165,7 +185,7 @@ CI scripts bind to these; no path fails silently with 0.
 | `env` — depends on an env var | ✅ | the key is stored in the capsule, **never the value** |
 | subtests (`t.Run` tree) | ✅ | the parent test is called; verdicts fold onto subtests |
 | `TestMain` | ✅ | the witness is installed in the same package, `TestMain` runs too |
-| pollution across two test packages | ❌ exit 5 | `pkg` and `pkg_test` are separate binaries: no witness can be installed |
+| pollution across two test packages | ⚠️ `--polluter-pkg` | only state that **survives the process boundary** (files, ports): hunt names the two-stage command `go test <polluter> && go test <victim>`, `replay` runs both stages. In-memory globals cannot cross two binaries — no witness is claimed. `compile` refuses these honestly (exit 5) and prints the runnable command |
 | time/network/DB dependent | ❌ | outside environment control |
 
 Every boundary is **honest**: instead of saying "no flake" in an out-of-scope
@@ -182,9 +202,10 @@ class, it names the class it cannot see.
     # fail-on-flake: "true"   # if you want the gate
 ```
 
-The action builds its own source from `GITHUB_ACTION_PATH`: `@v0.1.0` says
-which version is running, with no waiting on the proxy for a tag. Go 1.24+ is
-required (`actions/setup-go` is on you).
+The action prefers the prebuilt binary of its own tag (verified against
+`SHA256SUMS`) and falls back to building its own source from
+`GITHUB_ACTION_PATH`: `@v0.1.0` says which version is running, with no waiting
+on the proxy for a tag. Go 1.24+ is required (`actions/setup-go` is on you).
 
 `flakesmith init` writes this file into your repo (it never overwrites an
 existing one). The default is soft mode: a newly adopted flake hunter that
