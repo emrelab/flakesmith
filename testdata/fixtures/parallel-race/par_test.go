@@ -26,7 +26,12 @@ import (
 // stay for up to overlapWait; once both are in, poll returns in milliseconds,
 // so the failing (parallel) path stays fast. The sequential (-parallel=1)
 // path pays overlapWait once per test — bounded and intentional.
-const overlapWait = 500 * time.Millisecond
+// 2s, not the original 500ms: loaded windows runners (issue #12) can keep
+// the sibling from entering the barrier for longer than 500ms — Defender
+// scans every spawned test binary — and one squeezed verification round
+// reads as "not deterministic". The sequential path pays this once per
+// test; the failing (overlap) path still resolves in milliseconds.
+const overlapWait = 2 * time.Second
 
 var (
 	mu        sync.Mutex
