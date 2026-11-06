@@ -2,6 +2,14 @@ package facts
 
 import "sort"
 
+// Pos is where a test function is declared.
+type Pos struct {
+	// File is the absolute path of the declaring file.
+	File string
+	// Line is the 1-based line of the func keyword.
+	Line int
+}
+
 // PkgFacts is the static knowledge sheet for one test package directory.
 type PkgFacts struct {
 	// Dir is the package directory as given to Scan.
@@ -14,13 +22,28 @@ type PkgFacts struct {
 	// different test binaries: a harness cannot call across them.
 	Clause map[string]string
 
+	// TestPos is the declaration site of every test function the scan saw.
+	// SARIF annotations need file+line; the AST scan already has it, so it is
+	// free. Missing entry = the scan did not see that test (excluded by a
+	// build tag, or not in this directory).
+	TestPos map[string]Pos
+
 	// GlobalsWritten maps a test function to package-level vars it assigns.
 	GlobalsWritten map[string][]string
 	// GlobalsRead maps a test function to package-level vars it reads.
 	GlobalsRead map[string][]string
 
-	// EnvReads is every literal key passed to os.Getenv / os.LookupEnv.
+	// EnvReads is every literal key passed to os.Getenv / os.LookupEnv in the
+	// package's _test.go files.
 	EnvReads []string
+
+	// AppEnvReads is every literal key passed to os.Getenv / os.LookupEnv in
+	// the package's NON-test .go files (methods included). A test can flip on
+	// an env value it never reads itself: the application code reads it and
+	// the test exercises that path. Probe candidate order is test-local keys
+	// first, these second — app code is noisier and candidate order is
+	// budget order. Comparison literals land in EnvValues like test keys.
+	AppEnvReads []string
 
 	// EnvValues maps an env key to the string literals the code compares it
 	// against (`os.Getenv("MODE") == "ci"` -> MODE: ["ci"]). The env probe

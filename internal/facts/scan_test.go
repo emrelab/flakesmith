@@ -157,3 +157,160 @@ func contains(xs []string, want string) bool {
 	}
 	return false
 }
+
+// An env read that lives in the application code — not in any _test.go file —
+// must still reach the env probe: the witness runs the real `go test`, so a
+// variable the package code reads can flip the test's outcome just the same.
+// It must NOT leak into the test-file fields (EnvReads, FileCalls,
+// GlobalsWritten): those drive candidate selection elsewhere and app code is
+// pure noise for them.
+func TestScanCollectsAppEnvEvidence(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, body string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("app.go", `package p
+
+import "os"
+
+var cfg string
+
+type svc struct{}
+
+func (svc) init() {
+	if os.Getenv("DEPLOY_TARGET") == "staging" {
+		cfg = "staging"
+	}
+	os.WriteFile("out.txt", nil, 0o644)
+}
+
+func load() string { _ = os.Getenv("HOME"); return cfg }
+`)
+	write("nope.txt", "not go source")
+	write("a_test.go", `package p
+
+import (
+	"os"
+	"testing"
+)
+
+func TestPlain(t *testing.T) {
+	if os.Getenv("LOCAL_FLAG") == "on" {
+		t.Fatal("flag on")
+	}
+}
+`)
+
+	f, err := facts.Scan(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"DEPLOY_TARGET", "HOME"}; !reflect.DeepEqual(f.AppEnvReads, want) {
+		t.Errorf("AppEnvReads = %v, want %v", f.AppEnvReads, want)
+	}
+	// The test file's own key must stay a test-file signal (EnvReads), never
+	// duplicated into the app list.
+	if want := []string{"LOCAL_FLAG"}; !reflect.DeepEqual(f.EnvReads, want) {
+		t.Errorf("EnvReads = %v, want %v", f.EnvReads, want)
+	}
+	if got := f.EnvValues["DEPLOY_TARGET"]; len(got) != 1 || got[0] != "staging" {
+		t.Errorf("app comparison literal missing: EnvValues[DEPLOY_TARGET] = %v", got)
+	}
+	// HOME has no comparison literal: it is a key with no candidate values —
+	// the probe filters those out on its own, the scan must not invent any.
+	if _, ok := f.EnvValues["HOME"]; ok {
+		t.Error("HOME has no literal comparison, EnvValues must not claim one")
+	}
+	// Order-probe evidence must stay a strict test-file signal.
+	if len(f.FileCalls) != 0 {
+		t.Errorf("app os.WriteFile leaked into FileCalls: %v", f.FileCalls)
+	}
+	for fn := range f.GlobalsWritten {
+		t.Errorf("app function %q leaked into GlobalsWritten", fn)
+	}
+}
+
+// A key read in BOTH app and test code must not be reported twice: the probe
+// dedupes by first-seen order, and a duplicate here would reorder candidates.
+func TestScanAppEnvDedupesTestKeys(t *testing.T) {
+	dir := t.TempDir()
+	body := `package p
+
+import "os"
+
+var v = os.Getenv("MODE")
+
+func use() string {
+	if os.Getenv("MODE") == "ci" {
+		return "ci"
+	}
+	return v
+}
+`
+	if err := os.WriteFile(filepath.Join(dir, "app.go"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	writeTest := func(name, src string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeTest("a_test.go", `package p
+
+import (
+	"os"
+	"testing"
+)
+
+func TestPlain(t *testing.T) {
+	if os.Getenv("MODE") == "ci" {
+		t.Fatal("ci mode")
+	}
+}
+`)
+
+	f, err := facts.Scan(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"MODE"}; !reflect.DeepEqual(f.EnvReads, want) {
+		t.Errorf("EnvReads = %v, want %v", f.EnvReads, want)
+	}
+	if len(f.AppEnvReads) != 0 {
+		t.Errorf("MODE is a test key; AppEnvReads must stay empty, got %v", f.AppEnvReads)
+	}
+	if got := f.EnvValues["MODE"]; len(got) != 1 || got[0] != "ci" {
+		t.Errorf("EnvValues[MODE] = %v, want [ci]", got)
+	}
+}
+
+// SARIF annotations (#4) pin findings at the victim's declaration, so the scan
+// must record where every test function is declared — file and line, for every
+// test, in every parsed file.
+func TestScanRecordsTestPositions(t *testing.T) {
+	dir := t.TempDir()
+	body := "package p\n\nimport \"testing\"\n\nfunc TestFirst(t *testing.T) {}\n\nfunc TestSecond(t *testing.T) {}\n"
+	if err := os.WriteFile(filepath.Join(dir, "two_test.go"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	f, err := facts.Scan(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"TestFirst", "TestSecond"} {
+		pos, ok := f.TestPos[name]
+		if !ok {
+			t.Fatalf("%s has no recorded position", name)
+		}
+		if filepath.Base(pos.File) != "two_test.go" || pos.Line < 1 {
+			t.Errorf("%s pos = %+v", name, pos)
+		}
+	}
+	if f.TestPos["TestFirst"].Line >= f.TestPos["TestSecond"].Line {
+		t.Error("declaration order must survive into the line numbers")
+	}
+}

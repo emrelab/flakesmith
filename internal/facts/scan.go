@@ -22,6 +22,11 @@ import (
 // own regression test carries `//go:build flakesmith` and full of t.Run calls,
 // so counting it would mark the package as "uses subtests" and make every later
 // hunt in that package skip itself — a silent, self-inflicted no-op.
+//
+// The package's non-test .go files are parsed too, but ONLY for env evidence
+// (AppEnvReads + their comparison literals): a test can flip on a variable the
+// application code reads. Every other fact stays a strict test-file signal so
+// the order probe's candidates do not gain noise from app code.
 func Scan(dir string) (PkgFacts, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -31,6 +36,7 @@ func Scan(dir string) (PkgFacts, error) {
 	f := PkgFacts{
 		Dir:            dir,
 		Clause:         map[string]string{},
+		TestPos:        map[string]Pos{},
 		GlobalsWritten: map[string][]string{},
 		GlobalsRead:    map[string][]string{},
 		EnvValues:      map[string][]string{},
@@ -72,6 +78,11 @@ func Scan(dir string) (PkgFacts, error) {
 			fnName := fn.Name.Name
 			if strings.HasPrefix(fnName, "Test") {
 				f.Clause[fnName] = clause
+				// First declaration wins: a redefinition would not compile
+				// anyway, and a map that changes mid-scan is a trap.
+				if _, dup := f.TestPos[fnName]; !dup {
+					f.TestPos[fnName] = Pos{File: path, Line: fset.Position(fn.Pos()).Line}
+				}
 			}
 			if fnName == "TestMain" {
 				f.HasTestMain = true
@@ -114,6 +125,56 @@ func Scan(dir string) (PkgFacts, error) {
 	}
 
 	f.EnvReads = dedupeSort(f.EnvReads)
+
+	// Application files: an os.Getenv read that lives in the package's regular
+	// code (the test exercises it through a helper or the API under test) is
+	// invisible to the test-file scan, yet the env probe can reproduce it —
+	// the witness runs the real `go test`, not our analysis. The keys go to a
+	// SEPARATE field and the probe tries them after the test-local ones: app
+	// code reads many env vars no test outcome depends on, and candidate order
+	// is the probe's budget order.
+	testKeys := map[string]bool{}
+	for _, k := range f.EnvReads {
+		testKeys[k] = true
+	}
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		if strings.HasPrefix(name, "_") || strings.HasPrefix(name, ".") {
+			continue
+		}
+		path := filepath.Join(dir, name)
+		src, err := os.ReadFile(path)
+		if err != nil || excludedByBuildTags(src) {
+			continue
+		}
+		file, err := parser.ParseFile(fset, path, src, 0)
+		if err != nil {
+			continue
+		}
+		for _, decl := range file.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || fn.Name == nil || fn.Body == nil {
+				continue // asm stubs have no body; methods are wanted (env reads hide in them)
+			}
+			// nil globals: only the env evidence matters here; writes and
+			// reads of package vars stay a strictly test-file signal so the
+			// order probe's pollution candidates do not gain noise.
+			u := analyseFunc(fn, nil)
+			for _, k := range u.envs {
+				if !testKeys[k] {
+					f.AppEnvReads = append(f.AppEnvReads, k)
+				}
+			}
+			for k, vals := range u.envVals {
+				f.EnvValues[k] = append(f.EnvValues[k], vals...)
+			}
+		}
+	}
+	f.AppEnvReads = dedupeSort(f.AppEnvReads)
+
 	for k, vals := range f.EnvValues {
 		f.EnvValues[k] = dedupeSort(vals)
 	}
