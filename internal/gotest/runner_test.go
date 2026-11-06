@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -180,44 +179,50 @@ func writeFile(t *testing.T, path, content string) {
 	}
 }
 
-// TestExecShortFlag pins the operator-level -short plumbing with a fake go
-// binary that records its arguments: --short (Exec.Short) must reach the
-// go command on every invocation, and must not when the flag is off. The
-// runner is the only place that builds go arguments, so this single test
-// covers every hunt/repro path.
+// TestExecShortFlag pins the operator-level -short plumbing end-to-end with
+// the REAL go binary: a generated one-test package fails unless
+// testing.Short() is set, so a pass under Exec{Short:true} and a failure
+// under Exec{} prove the flag reaches the go command in both directions.
+// (The first version of this test used a /bin/sh shim — windows CI rightly
+// could not exec it. Portability is a product promise here, not a maybe.)
 func TestExecShortFlag(t *testing.T) {
-	dir := t.TempDir()
-	argsFile := filepath.Join(dir, "args.txt")
-	shim := filepath.Join(dir, "go")
-	script := "#!/bin/sh\necho \"$@\" > " + shellQuote(argsFile) +
-		"\nprintf '%s\\n' '{\"Action\":\"pass\",\"Package\":\"shim\"}'\n"
-	if err := os.WriteFile(shim, []byte(script), 0o755); err != nil {
-		t.Fatal(err)
+	if testing.Short() {
+		t.Skip("integration test: runs real go test")
 	}
-
-	for _, tc := range []struct {
-		short bool
-		want  bool
-	}{{true, true}, {false, false}} {
-		if err := os.Remove(argsFile); err != nil && !os.IsNotExist(err) {
+	dir := t.TempDir()
+	write := func(name, content string) {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		e := &Exec{GoBin: shim, Short: tc.short}
-		if _, err := e.Run(context.Background(), domain.RunSpec{Package: dir, Timeout: 30 * time.Second}); err != nil {
-			t.Fatalf("Short=%v: Run: %v", tc.short, err)
-		}
-		data, err := os.ReadFile(argsFile)
-		if err != nil {
-			t.Fatalf("Short=%v: args not recorded: %v", tc.short, err)
-		}
-		has := strings.Contains(string(data), "-short")
-		if has != tc.want {
-			t.Errorf("Short=%v: args contain -short=%v, want %v (%q)", tc.short, has, tc.want, data)
-		}
+	}
+	write("go.mod", "module shortprobe\n\ngo 1.24\n")
+	write("p_test.go", `package shortprobe
+
+import "testing"
+
+// TestShortSeen is the sensor: it fails unless the harness ran with -short.
+func TestShortSeen(t *testing.T) {
+	if !testing.Short() {
+		t.Fatal("want -short in the go test invocation")
 	}
 }
+`)
 
-// shellQuote keeps the shim script independent of tempdir path quirks.
-func shellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+	e := &Exec{Short: true}
+	res, err := e.Run(context.Background(), domain.RunSpec{Package: dir, Timeout: 3 * time.Minute})
+	if err != nil {
+		t.Fatalf("Short=true: Run: %v", err)
+	}
+	if res.Failed("TestShortSeen") {
+		t.Errorf("Short=true: -short did not reach the test binary")
+	}
+
+	e = &Exec{}
+	res, err = e.Run(context.Background(), domain.RunSpec{Package: dir, Timeout: 3 * time.Minute})
+	if err != nil {
+		t.Fatalf("Short=false: Run: %v", err)
+	}
+	if !res.Failed("TestShortSeen") {
+		t.Errorf("Short=false: the sensor passed without -short — it tests nothing")
+	}
 }
