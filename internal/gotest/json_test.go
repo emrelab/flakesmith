@@ -1,6 +1,8 @@
 package gotest
 
 import (
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/emrelab/flakesmith/internal/domain"
@@ -91,5 +93,48 @@ func TestParseEventsSkipsNoise(t *testing.T) {
 	}
 	if len(res.Outcomes) != 2 {
 		t.Errorf("corrupt lines must be skipped, found %d results", len(res.Outcomes))
+	}
+}
+
+// Failures is the suspect-list reader for `repro --from-json` (#5). The
+// contract it must never break: valid log without failures is NOT an error,
+// and non-log input is NOT reported as "no failures".
+func TestFailuresReadsSuspectList(t *testing.T) {
+	log := strings.Join([]string{
+		"go: downloading github.com/x/y v0.1.0", // build noise before the stream
+		`{"Action":"start","Package":"example.com/a"}`,
+		`{"Action":"run","Package":"example.com/a","Test":"TestGood"}`,
+		`{"Action":"pass","Package":"example.com/a","Test":"TestGood"}`,
+		`{"Action":"fail","Package":"example.com/a","Test":"TestBad/sub"}`, // subtest → parent
+		`{"Action":"fail","Package":"example.com/a","Test":"TestBad"}`,     // duplicate → deduped
+		`{not json}`, // corrupt record skipped
+		`{"Action":"fail","Package":"example.com/b","Test":"TestOther"}`,
+		`{"Action":"fail","Package":"example.com/c"}`, // package-level fail: build, not a test
+	}, "\n")
+
+	got, err := Failures([]byte(log))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []domain.TestID{
+		{Package: "example.com/a", Name: "TestBad"},
+		{Package: "example.com/b", Name: "TestOther"},
+	}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Errorf("Failures = %v, want %v", got, want)
+	}
+}
+
+// A green log has an empty list, not an error; a file that is not a test2json
+// log at all is an error. Swapping the two would tell a CI "nothing failed"
+// when it handed us a truncated artifact.
+func TestFailuresDistinguishesEmptyFromGarbage(t *testing.T) {
+	ids, err := Failures([]byte(`{"Action":"pass","Package":"p","Test":"T"}` + "\n"))
+	if err != nil || len(ids) != 0 {
+		t.Errorf("clean log: got %v, %v; want empty, nil", ids, err)
+	}
+	_, err = Failures([]byte("panic: runtime error: something\n\n/tmp/x_test.go:12\n"))
+	if !errors.Is(err, domain.ErrUsage) {
+		t.Errorf("non-log input: err = %v, want ErrUsage", err)
 	}
 }

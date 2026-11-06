@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -108,6 +109,63 @@ func parseEvents(data []byte, spec domain.RunSpec, exitCode int, elapsed time.Du
 		res.Outcomes[name] = domain.Outcome{Status: domain.StatusSkip, Output: Normalize(b.String())}
 	}
 	return res, nil
+}
+
+// Failures extracts the failing tests from a complete `go test -json` log.
+//
+// This is the suspect list `repro --from-json` shrinks one by one: CI already
+// paid for the discovery, and re-running a full hunt to rediscover what the
+// log says is waste. Subtest failures ("TestX/sub") become the parent test —
+// repro reproduces whole test functions, and a subtest cannot be named by
+// -run without running its parent anyway.
+//
+// A line that is not JSON is skipped (build noise around the stream); an input
+// with NO JSON records at all is an error, because "the file is not a test2json
+// log" must never read as "the log had no failures".
+func Failures(data []byte) ([]domain.TestID, error) {
+	sc := bufio.NewScanner(bytes.NewReader(data))
+	sc.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
+
+	seen := map[string]bool{}
+	anyRecord := false
+	var out []domain.TestID
+	for sc.Scan() {
+		line := bytes.TrimSpace(sc.Bytes())
+		if len(line) == 0 || line[0] != '{' {
+			continue
+		}
+		var ev event
+		if err := json.Unmarshal(line, &ev); err != nil {
+			continue
+		}
+		anyRecord = true
+		if ev.Action != "fail" || ev.Test == "" {
+			continue // package-level fails are build/setup failures: no test to repro
+		}
+		name := ev.Test
+		if i := strings.Index(name, "/"); i >= 0 {
+			name = name[:i]
+		}
+		key := ev.Package + "\x00" + name
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, domain.TestID{Package: ev.Package, Name: name})
+	}
+	if err := sc.Err(); err != nil {
+		return nil, fmt.Errorf("json stream: %w", err)
+	}
+	if !anyRecord {
+		return nil, fmt.Errorf("%w: no test2json records found", domain.ErrUsage)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Package != out[j].Package {
+			return out[i].Package < out[j].Package
+		}
+		return out[i].Name < out[j].Name
+	})
+	return out, nil
 }
 
 func statusOf(action string) domain.Status {
