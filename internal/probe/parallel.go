@@ -2,6 +2,7 @@ package probe
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"strings"
 
@@ -96,21 +97,35 @@ func (p Parallel) Probe(ctx context.Context, tgt Target, r gotest.Runner) (*doma
 		return nil, ErrNotReproduced
 	}
 
-	siblings := siblingsOf(tgt)
-	if len(siblings) == 0 {
-		// Nothing to overlap with: the package already proved it fails only
-		// under concurrency, but the only test in it is the victim.
-		return nil, ErrNotReproduced
-	}
-
+	// The clause is resolved before candidate collection: an unknown clause is
+	// ErrUnsupportedTest, and it is what makes the split below meaningful.
 	clause, fn, err := p.witnessShape(tgt)
 	if err != nil {
 		return nil, err
 	}
 
+	same, cross := parallelCandidates(tgt)
+	if len(same) == 0 {
+		if len(cross) > 0 {
+			// The victim only failed under concurrency and every test it could
+			// have overlapped with lives in the other clause: the shape is
+			// real, the witness form cannot call those functions.
+			return nil, crossClauseError(tgt, cross, "parallel witness")
+		}
+		// Nothing to overlap with: the package already proved it fails only
+		// under concurrency, but the only test in it is the victim.
+		return nil, ErrNotReproduced
+	}
+
 	pred := p.predicate(tgt, r, clause, fn)
-	min, err := search.Minimize(ctx, siblings, pred, verify)
+	min, err := search.Minimize(ctx, same, pred, verify)
 	if err != nil {
+		// Same-clause candidates do not explain the overlap while the other
+		// clause does: the missing polluter is on the other side of the clause
+		// boundary. Report it instead of the generic "not reproducible".
+		if errors.Is(err, domain.ErrNotReproducible) && len(cross) > 0 {
+			return nil, crossClauseError(tgt, cross, "parallel witness")
+		}
 		return nil, err
 	}
 	if len(min) == 0 {
@@ -195,9 +210,23 @@ func (p Parallel) witnessShape(tgt Target) (clause, fn string, err error) {
 	return clause, harness.FuncName(tgt.Facts.Clause), nil
 }
 
-// siblingsOf lists every other test in the victim's own test binary. A test in
-// the other clause cannot be overlapped with: it is a separate process.
-func siblingsOf(tgt Target) []domain.TestID {
+// parallelCandidates lists every other test the witness could call, split by
+// package clause.
+//
+// The split is a correctness requirement, not an optimisation. The witness is
+// generated into the victim's own clause and calls test functions by name, so a
+// test from the other clause (`p` vs `p_test`) is not in scope there: the
+// compiler says "undefined: TestOther". Handing those names to search.Minimize
+// turns a legitimate "this shape exists but I cannot express it" into
+// domain.ErrInternal ("witness did not compile"), which ddmin propagates
+// straight out of the probe.
+//
+// Note what a clause is: a package-visibility boundary, not a binary boundary —
+// the two clauses of one directory are linked into ONE test binary, so their
+// tests really do overlap, and one of them really can be the polluter. That is
+// why a cross-clause candidate is reported as unsupported instead of dropped:
+// silence would read as "no flake".
+func parallelCandidates(tgt Target) (same, cross []domain.TestID) {
 	names := make([]string, 0, len(tgt.Facts.Clause))
 	for name := range tgt.Facts.Clause {
 		// TestMain takes *testing.M, not *testing.T: calling it from a witness
@@ -209,11 +238,11 @@ func siblingsOf(tgt Target) []domain.TestID {
 	}
 	sort.Strings(names)
 
-	out := make([]domain.TestID, 0, len(names))
+	cands := make([]domain.TestID, 0, len(names))
 	for _, name := range names {
-		out = append(out, domain.TestID{Package: tgt.Test.Package, Name: name})
+		cands = append(cands, domain.TestID{Package: tgt.Test.Package, Name: name})
 	}
-	return out
+	return splitByClause(cands, tgt.Facts.Clause, tgt.Test.Name)
 }
 
 // concurrencyWidth is how many tests to overlap when asking "is this package

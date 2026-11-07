@@ -165,3 +165,162 @@ func TestParallelGateRunsNothingAndSaysWhy(t *testing.T) {
 		t.Errorf("the reason must state the reason: %q", res.Tried[0].Reason)
 	}
 }
+
+// A package whose only overlap partner lives in the other clause: the shape is
+// real (the tests do share one binary and one -parallel pool), but the witness
+// file is generated into the victim's clause and cannot call the other clause's
+// functions. The answer must be ErrUnsupportedTest — never ErrInternal, which is
+// what "witness did not compile" used to produce, and which ddmin propagated
+// straight out of the probe.
+func TestParallelReportsCrossClauseInsteadOfInternal(t *testing.T) {
+	tgt := probe.Target{
+		Test: domain.TestID{Package: "p", Name: "TestOuterVictim"},
+		Dir:  t.TempDir(),
+		Facts: facts.PkgFacts{
+			Clause:       map[string]string{"TestOuterVictim": "p_test", "TestInner": "p"},
+			TestParallel: map[string]bool{"TestOuterVictim": true, "TestInner": true},
+		},
+	}
+
+	witnessRuns := 0
+	fake := &gotest.Fake{RunFn: func(s domain.RunSpec) (*domain.RunResult, error) {
+		switch {
+		case strings.HasPrefix(s.RunRegex, "^TestFlakeWitness"):
+			// No witness may be attempted: a cross-clause name in it is a
+			// compile error, and attempting it is the bug under test.
+			witnessRuns++
+			res := gotest.Result(s, nil)
+			res.BuildFailed = true
+			return res, nil
+		case s.RunRegex != "":
+			return gotest.Result(s, map[string]domain.Status{"TestOuterVictim": domain.StatusPass}), nil
+		case s.Parallel >= 2:
+			return gotest.Result(s, map[string]domain.Status{
+				"TestOuterVictim": domain.StatusFail, "TestInner": domain.StatusPass,
+			}), nil
+		default:
+			return gotest.Result(s, map[string]domain.Status{
+				"TestOuterVictim": domain.StatusPass, "TestInner": domain.StatusPass,
+			}), nil
+		}
+	}}
+
+	_, err := probe.Parallel{}.Probe(context.Background(), tgt, fake)
+	if err == nil {
+		t.Fatal("a cross-clause package must be refused, not silently reported clean")
+	}
+	if !errors.Is(err, domain.ErrUnsupportedTest) {
+		t.Fatalf("expected ErrUnsupportedTest, got %v", err)
+	}
+	if errors.Is(err, domain.ErrInternal) {
+		t.Fatalf("ErrInternal is the bug: %v", err)
+	}
+	if witnessRuns != 0 {
+		t.Errorf("no witness may be built with a cross-clause candidate, got %d build(s)", witnessRuns)
+	}
+	// The message must name both tests and both clauses: "unsupported" alone
+	// leaves the reader guessing what defeated the tool.
+	for _, want := range []string{"TestInner", "TestOuterVictim", "package p", "p_test"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error message missing %q: %v", want, err)
+		}
+	}
+}
+
+// Same-clause candidates exist but none reproduces the overlap, and the package
+// does contain a test from the other clause: the missing polluter is across the
+// clause boundary. Reporting "does not explain" would read as "no flake".
+func TestParallelReportsCrossClauseWhenSameClauseFailsToReproduce(t *testing.T) {
+	tgt := probe.Target{
+		Test: domain.TestID{Package: "p", Name: "TestOuterVictim"},
+		Dir:  t.TempDir(),
+		Facts: facts.PkgFacts{
+			Clause: map[string]string{
+				"TestOuterVictim": "p_test",
+				"TestSibling":     "p_test",
+				"TestInner":       "p",
+			},
+			TestParallel: map[string]bool{
+				"TestOuterVictim": true, "TestSibling": true, "TestInner": true,
+			},
+		},
+	}
+
+	fake := &gotest.Fake{RunFn: func(s domain.RunSpec) (*domain.RunResult, error) {
+		switch {
+		case strings.HasPrefix(s.RunRegex, "^TestFlakeWitness"):
+			// The victim passes inside the witness: the same-clause sibling
+			// does not explain the overlap.
+			return gotest.Result(s, nil), nil
+		case s.RunRegex != "":
+			return gotest.Result(s, map[string]domain.Status{"TestOuterVictim": domain.StatusPass}), nil
+		case s.Parallel >= 2:
+			return gotest.Result(s, map[string]domain.Status{
+				"TestOuterVictim": domain.StatusFail,
+				"TestSibling":     domain.StatusPass,
+				"TestInner":       domain.StatusPass,
+			}), nil
+		default:
+			return gotest.Result(s, map[string]domain.Status{
+				"TestOuterVictim": domain.StatusPass,
+				"TestSibling":     domain.StatusPass,
+				"TestInner":       domain.StatusPass,
+			}), nil
+		}
+	}}
+
+	_, err := probe.Parallel{}.Probe(context.Background(), tgt, fake)
+	if !errors.Is(err, domain.ErrUnsupportedTest) {
+		t.Fatalf("expected ErrUnsupportedTest, got %v", err)
+	}
+}
+
+// The filter must not over-refuse: with a same-clause polluter present, the
+// witness is built from it alone and the cross-clause test is never called.
+func TestParallelIgnoresCrossClauseWhenSameClauseExplains(t *testing.T) {
+	tgt := probe.Target{
+		Test: domain.TestID{Package: "p", Name: "TestAlpha"},
+		Dir:  t.TempDir(),
+		Facts: facts.PkgFacts{
+			Clause: map[string]string{
+				"TestAlpha": "p", "TestBeta": "p", "TestInner": "p_test",
+			},
+			TestParallel: map[string]bool{"TestAlpha": true, "TestBeta": true, "TestInner": true},
+		},
+	}
+
+	fake := &gotest.Fake{RunFn: func(s domain.RunSpec) (*domain.RunResult, error) {
+		switch {
+		case strings.HasPrefix(s.RunRegex, "^TestFlakeWitness"):
+			name := strings.Trim(s.RunRegex, "^$")
+			res := gotest.Result(s, nil)
+			if s.Parallel >= 2 {
+				res.Outcomes[domain.WitnessSubtest(name, "TestAlpha")] = domain.Outcome{Status: domain.StatusFail}
+			}
+			return res, nil
+		case s.RunRegex != "":
+			return gotest.Result(s, map[string]domain.Status{"TestAlpha": domain.StatusPass}), nil
+		case s.Parallel >= 2:
+			return gotest.Result(s, map[string]domain.Status{
+				"TestAlpha": domain.StatusFail, "TestBeta": domain.StatusPass, "TestInner": domain.StatusPass,
+			}), nil
+		default:
+			return gotest.Result(s, map[string]domain.Status{
+				"TestAlpha": domain.StatusPass, "TestBeta": domain.StatusPass, "TestInner": domain.StatusPass,
+			}), nil
+		}
+	}}
+
+	w, err := probe.Parallel{}.Probe(context.Background(), tgt, fake)
+	if err != nil {
+		t.Fatalf("a same-clause witness was expected: %v", err)
+	}
+	if len(w.Polluters) != 1 || w.Polluters[0].Name != "TestBeta" {
+		t.Fatalf("polluters = %+v, want only TestBeta (TestInner is not callable)", w.Polluters)
+	}
+	for _, st := range w.Steps {
+		if st.Test.Name == "TestInner" {
+			t.Fatalf("cross-clause test reached the witness steps: %+v", st)
+		}
+	}
+}
