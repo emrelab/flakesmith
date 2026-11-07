@@ -26,7 +26,7 @@ jobs:
       # write CRLF working trees and gofmt would flag every file. Env-level git
       # config (GIT_CONFIG_COUNT, git >= 2.31) outranks the image's system
       # gitconfig for the checkout process, so files materialize with LF.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         env:
           GIT_CONFIG_COUNT: '1'
           GIT_CONFIG_KEY_0: core.autocrlf
@@ -86,7 +86,7 @@ jobs:
   oldest:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v5
         with:
           go-version: '1.24'
@@ -104,7 +104,7 @@ jobs:
   self-hunt:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v5
         with:
           go-version: '1.26'
