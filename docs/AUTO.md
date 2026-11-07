@@ -202,7 +202,8 @@ End the run, in this order of precedence:
 3. Any banned action, or a gate that cannot go green → `[~]` revert the tree,
    comment the blocker with the exact command that failed, `auto:blocked`,
    exit. Do not start the next issue: a blocker may poison the following one.
-4. `MAX_ISSUES` reached (default 2, set by the launcher) → stop cleanly.
+4. `MAX_ISSUES` reached (default 2 from the launcher; the cron job sets 6) →
+   stop cleanly and let the next tick continue.
 
 Never leave the tree dirty, never leave a branch half-pushed, never leave an
 issue with `auto:wip` and no live run behind it. `auto:wip` without a branch on
@@ -227,9 +228,13 @@ Append the lines for each issue handled. No prose, no plan, no apology, no
 A human arms it; the system finishes on its own. Two entry points, one rulebook.
 
 **Scheduled (draining mode).** A Hermes cron job `flakesmith-oto-issue`
-(`926d39926d48`) runs every 2 h, one issue per tick, and is **gated by a
-monitor** (`~/.hermes/scripts/flakesmith-queue.sh`): its output is the picked
-issue line, `BUSY` on a dirty tree, or `EMPTY`. Identical output across ticks
+(`926d39926d48`) runs every 2 h and is **gated by a monitor**
+(`~/.hermes/scripts/flakesmith-queue.sh`): its output is the picked
+issue line, `BUSY` on a dirty tree, or `EMPTY`. A tick that wakes up **drains**:
+it works one issue, passes §5 and §7 for it, and only then takes the next —
+`MAX_ISSUES=6` per tick, after which the next tick continues. A blocker (§8.3)
+still ends the tick immediately, because a blocker may poison the following
+issue. Identical output across ticks
 suppresses the agent entirely, so an idle queue costs nothing — the monitor, not
 the pause, is the real cost guard.
 
