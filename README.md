@@ -204,6 +204,13 @@ class, it names the class it cannot see.
     # fail-on-flake: "true"   # if you want the gate
 ```
 
+**Budget defaults differ by surface, on purpose.** Local `hunt` starts at 1000
+runs / 5m — a laptop can afford the coverage of `./...`; the Action and the
+`flakesmith init` scaffold start at 200 runs / 10m, because a shared runner's
+wall clock is the scarce resource and ten minutes is what a job can spend on one
+hunt before it looks hung. Pass `budget:`/`--budget` and `timeout:`/`--timeout`
+when you want the same shape on both.
+
 The action prefers the prebuilt binary of its own tag (verified against
 `SHA256SUMS`) and falls back to building its own source from
 `GITHUB_ACTION_PATH`: `@v0.2.0` says which version is running, with no waiting

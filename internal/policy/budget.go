@@ -15,8 +15,15 @@ import (
 // on spf13/pflag (≈120 tests): a full scan needs roughly 300 runs, so a 200-run
 // cap stopped the hunt mid-package and reported exit 4 — a correct signal, but
 // the wrong default for "first 5 minutes". 1000 runs ≈ 3 minutes of warm builds
-// and still bounds a pathological search; 5 minutes is the wall clock a CI job
-// can afford to lose before someone notices.
+// and still bounds a pathological search; five minutes is the wall clock a
+// local hunt may lose before it feels stuck.
+//
+// These are the LOCAL defaults. The GitHub Action (`action.yml`) and the
+// `flakesmith init` scaffold use 200 runs / 10m instead: a shared CI runner
+// pays for wall clock far more dearly than a laptop, so the two surfaces start
+// from different points on purpose. The divergence is stated in the README
+// ("Budget defaults differ by surface") — changing one side is a product
+// decision, not a tidy-up, so do not "align" these numbers silently.
 const (
 	DefaultMaxRuns = 1000
 	DefaultMaxWall = 5 * time.Minute
