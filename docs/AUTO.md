@@ -49,6 +49,24 @@ from `origin/main` there would erase `scripts/auto/` and `docs/AUTO.md` from the
 worktree. Exit 4 from `base.sh` means the two diverged — a human must rebase;
 report it and stop.
 
+### Dirty tree that is hours old = a dead run, not a live one
+
+The scheduled monitor distinguishes the two: `BUSY-0` means the tree changed
+within the hour (a run is live — leave), `BUSY-STALE-h<n>` means the tree has
+been dirty for `n+` hours, which means a run crashed mid-flight. On
+`BUSY-STALE`:
+
+1. Touch nothing. Do not commit, revert, stash, or `git checkout -- .` — the
+   uncommitted work may be the only copy of a good attempt, and reverting a
+   stranger's tree is exactly the damage this rulebook prevents.
+2. Report to Telegram: the dirty file list plus `gh issue list --label auto:wip`.
+   That is what a human needs to un-stick it.
+3. Pause the cron job and stop.
+
+This path exists because a flat `BUSY` is stable bytes: the monitor would
+suppress every tick and a crashed run would deadlock the queue silently and
+forever. The age bucket is what makes the failure visible.
+
 ## 2. Pick exactly one issue
 
 ```
