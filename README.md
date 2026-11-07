@@ -216,6 +216,9 @@ The action prefers the prebuilt binary of its own tag (verified against
 `GITHUB_ACTION_PATH`: `@v0.2.0` says which version is running, with no waiting
 on the proxy for a tag. Go 1.24+ is required (`actions/setup-go` is on you).
 
+Turn an already-red `go test` log into a PR comment — `repro --from-json` shrinks
+the log's own failures to a witness, no re-scan: [`docs/CI-REPRO.md`](docs/CI-REPRO.md).
+
 `flakesmith init` writes this file into your repo (it never overwrites an
 existing one). The default is soft mode: a newly adopted flake hunter that
 turns CI red on day one gets removed on day two.

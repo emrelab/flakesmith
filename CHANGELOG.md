@@ -7,6 +7,11 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- `docs/CI-REPRO.md`: the CI glue for a red `go test` log — capture the `-json`
+  log as an artifact, `repro --from-json` it, post one upserted PR comment with
+  the witness. Comments only on exit 0: exit 3/4 means no witness, and silence is
+  the honest answer. The workflow is a template (not wired into `.github/`), and
+  the page says which half was verified locally.
 - `scripts/test-cost.sh` / `make cost`: wall time, per-package time and the
   slowest tests. An operator tool for this exact tuning, not a gate — a
   wall-time assertion is the flakiness issue #12 removed.
