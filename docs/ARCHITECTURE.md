@@ -667,6 +667,20 @@ same file on every run — it becomes "one capsule per bug", not "one capsule pe
 `count` is deliberately excluded too — the same victim, the same polluter, the same
 class is the same bug; the number of repetitions it was caught in does not change the identity.
 
+`repo.dirty` is excluded for a related but distinct reason: **a capsule is a claim about
+committed code.** The identity names the tree the evidence is about (`commit`), and the
+working tree is a *property of that run*, not of the bug — it travels next to the identity
+as `repo.dirty: true`, which is where a consumer that cares (a CI gate refusing evidence
+taken over uncommitted patches) reads it. Mixing a tree-state digest into the ID would make
+every save-edit-rerun cycle mint a new capsule for the same defect, and the file would stop
+being a stable answer to "what does this commit owe us?".
+
+The cost of that decision is real and accepted: a hunt over uncommitted changes overwrites
+the capsule of the committed tree it just proved, and the overwritten file carries
+`dirty: true`, so the loss is visible in the artifact rather than silent. A user who wants
+the two kept apart commits or stashes before hunting — the tool does not guess which of the
+two trees a capsule belongs to.
+
 ```json
 {
   "schema": "flakesmith/v1",
@@ -940,7 +954,12 @@ The Red Team analysis (K1) makes this the MVP's survival condition:
 - ❌ **Go toolchain patch / runtime fork / WASM** — none (ReplayGo's territory).
 - ❌ **DB/HTTP replay** — none. External dependency → `probabilistic` label.
 - ❌ **Subtest (`t.Run` inner) support** — outside the MVP; explicitly refused with `ErrUnsupportedTest`.
-- ❌ **Cross-package order** — none. Same test binary required.
+- ❌ **Cross-package order *within one process*** — none. `--polluter-pkg` runs two `go test`
+  processes in a chosen sequence and merges the verdicts, so only state that survives the
+  process boundary (files, ports, cwd) is expressible there; an in-memory global that the
+  first binary dirtied is gone by the time the second one starts. The old blanket ban on
+  "cross-package order" was wrong twice over: that engine ships, and two *clauses* of one
+  directory (`pkg` + `pkg_test`) are not two binaries at all — they link into one.
 - ❌ **Test impact analysis / quarantine / flake trend** — Phase 5.
 
 This fence is the written answer to "one more feature" requests: every item is a competitor's territory or a scope beyond a single developer.

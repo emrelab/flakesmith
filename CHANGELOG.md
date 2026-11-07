@@ -37,6 +37,10 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   and the nightly `-count=10` sweep on all three OSes still covers it.
 
 ### Fixed
+- `docs/ARCHITECTURE.md` §14 no longer bans "cross-package order" outright: the
+  `--polluter-pkg` two-stage engine ships, so the fence now excludes what is
+  actually out of reach — in-memory state across two `go test` processes — and
+  the note that two *clauses* of one directory link into one binary.
 - The autonomous loop's review tier could feed itself: a run opened a PR and
   dropped `auto:wip`, which left the issue open, still `auto:review`, and the
   very next `next.sh` call picked it again — one design re-proposed up to
