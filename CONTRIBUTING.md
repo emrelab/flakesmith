@@ -60,6 +60,21 @@ assert it in the fixture matrix table of the PR.
 - Message: `package: what was done` (e.g. `gotest: mark dropped tests correctly in JSON stream`).
 - Do not open a PR before `make all` is green.
 
+## The autonomous loop
+
+Some issues are worked by an agent, unattended. That is not a second rulebook:
+the rules live in one file, `docs/AUTO.md`.
+
+- The queue **is** the issue tracker. `auto:safe` ships itself on green CI;
+  `auto:review` stops at an open PR for a human. `auto:wip` means a run holds
+  it, `auto:blocked` means a run gave up and said why. `P1` overrides the order.
+- Only a human applies `auto:safe` / `auto:review` / `P1`. A run may never
+  promote its own work.
+- A run starts on demand — `make auto` or the `flakesmith-oto-issue` cron —
+  and stops itself when the queue drains (`KUYRUK BOS`). Never on a schedule
+  that keeps firing past the work: a timer with an empty queue is how a repo
+  starts inventing things to do.
+
 ## Where to look
 
 | Question | File |

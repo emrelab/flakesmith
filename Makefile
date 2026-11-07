@@ -1,4 +1,4 @@
-.PHONY: all build test test-repeat cost vet fmt cover fixtures clean run smoke
+.PHONY: all build test test-repeat cost vet fmt cover fixtures clean run smoke auto auto-next auto-verify
 
 BINARY := flakesmith
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
@@ -27,6 +27,17 @@ test-repeat:
 # Operator tool, not a gate: see the header of the script.
 cost:
 	scripts/test-cost.sh
+
+# Autonomous run over the issue tracker. No cron: a human starts it, see
+# docs/AUTO.md. MAX caps how many issues one run may touch.
+auto:
+	scripts/auto/run.sh $(MAX)
+
+auto-next:
+	scripts/auto/next.sh
+
+auto-verify:
+	scripts/auto/verify.sh
 
 vet:
 	go vet ./...
