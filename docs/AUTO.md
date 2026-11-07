@@ -241,10 +241,12 @@ The job is pinned to `deepseek-v4.1-flash` at `--reasoning-effort high` on the
 `custom` provider (Evren LLM, `https://evren-llmapi.ssyz.org.tr/v1`). Pinned
 per job, not globally: the reasoning budget is the job's, and a later
 `hermes model` change must not silently move an unattended worker to a cheaper
-model. Verify the route without firing the job:
+model. `hermes cron list` does NOT print the model, so read the record directly:
 
 ```
-hermes cron list                       # model + provider per job
+jq -r '.jobs[] | select(.id=="926d39926d48")
+       | "\(.name) model=\(.model) provider=\(.provider) reasoning=\(.reasoning_effort)"' \
+   ~/.hermes/cron/jobs.json
 ```
 
 The job is created **paused**. To drain the queue:
