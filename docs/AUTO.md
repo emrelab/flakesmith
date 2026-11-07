@@ -215,6 +215,10 @@ issue line, `BUSY` on a dirty tree, or `EMPTY`. Identical output across ticks
 suppresses the agent entirely, so an idle queue costs nothing — the monitor, not
 the pause, is the real cost guard.
 
+Every tick's report is delivered to **Telegram** (`telegram:1590860965`), the
+same channel failures go to; a `deliver: origin` target would make a 03:00
+failure invisible in a desktop chat nobody is reading.
+
 The job is created **paused**. To drain the queue:
 
 ```
