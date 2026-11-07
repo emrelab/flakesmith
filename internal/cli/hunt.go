@@ -128,20 +128,13 @@ func newScanner(out IO, o huntOptions, only string) *scanner {
 	// Cache: the shuffle scan is paid once per package, not per test.
 	// 23s -> a few seconds on a 3-test fixture; 10x difference at 30 tests.
 	runner := gotest.NewCache(gotest.Budgeted{Inner: &gotest.Exec{Short: o.short}, Budget: budget}, 0)
-	// Order matters: cheap probe first. The registry comes from one place so
-	// adding a probe never requires touching the CLI.
-	probes := []probe.Probe{
-		probe.Repeat{Count: o.repeat},
-		probe.Order{Seeds: probe.SeedsN(o.seeds)},
-		probe.Parallel{},
-		probe.Env{},
-	}
-	if o.polluterDir != "" {
-		// The two-binary engine (#6) is last and opt-in: it is the most
-		// expensive probe and its search space is a whole foreign package.
-		probes = append(probes, probe.OrderCross{PolluterDir: o.polluterDir})
-	}
-	registry := probe.NewRegistry(probes...)
+	// The probe set and its cost order live in probe.Default; the CLI only
+	// supplies the flag values. That is what keeps the registry from drifting.
+	registry := probe.Default(probe.Config{
+		Repeat:      o.repeat,
+		Seeds:       probe.SeedsN(o.seeds),
+		PolluterDir: o.polluterDir,
+	})
 	cwd, _ := os.Getwd()
 	return &scanner{o: o, out: out, registry: registry, runner: runner, budget: budget, only: only, cwd: cwd}
 }
