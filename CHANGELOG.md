@@ -6,6 +6,32 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- `scripts/test-cost.sh` / `make cost`: wall time, per-package time and the
+  slowest tests. An operator tool for this exact tuning, not a gate — a
+  wall-time assertion is the flakiness issue #12 removed.
+- `TestHuntRecordsCapsuleProvenance`: the capsule's `repo.commit` and
+  `repo.dirty` are asserted against a repository the test owns, in both the
+  struct and the JSON a CI consumer reads.
+- `TestScanRecordsGlobalsWrittenThroughEveryShape`: all five assignment shapes
+  the AST scanner must see through (`x =`, `x.f =`, `x[i] =`, `*p =`, `(x) =`).
+
+### Changed
+- The CLI's integration suite is split into six test-only packages —
+  `internal/cli/{hunt,huntci,huntevidence,compile,replay,surface}` — over a
+  shared `internal/clitest` harness. `go test` runs tests inside a package
+  serially but packages in parallel, and every CLI test spawns real `go test`
+  subprocesses (a single `hunt` on `order-basic` spawns 33 `go` processes), so
+  the single package sat on one core for its whole 185s. Same assertions, same
+  count: the `-json` test-name set (subtests included) is 239 before and 239
+  after, with no additions. Local wall time 185s → 50-55s; `-race` 184s → 56s.
+- PR repeat sweep narrower and honest about it: `-count=3` now covers the unit
+  and probe packages, and the integration layer runs once per OS per PR. A
+  repeat exists to surface state that survives between runs in one process;
+  there it multiplies subprocess spawns instead (18m35s on windows-latest at
+  `-count=3`). No CI failure to date came from a repeat-only leak in that layer,
+  and the nightly `-count=10` sweep on all three OSes still covers it.
+
 ### Fixed
 - `parallel-race` fixture no longer times out into a false "no overlap": the
   barrier is a channel closed by the second arriver (the first wakes in
@@ -29,6 +55,16 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   the full suite again. The pattern's `$` anchor made `^\.github/workflows/$`
   match only a directory name, which is never a staged file, so CI-only
   commits — exactly the ones the gate exists for — ran build+vet alone.
+- `make cover` collapsed from 78% to 51% after the split: `go test
+  -coverprofile` collects a package's coverage only from tests physically
+  inside it, and the CLI's tests now live next door. `-coverpkg=./...` restores
+  it (82.5%, identical to the pre-split number measured the same way).
+- Two tests hunted the live `testdata` fixture instead of a copy
+  (`TestHuntEndToEnd`, `TestHuntBudgetWritesPartialCapsule`), which made them
+  depend on the surrounding working tree — their git state leaked into the
+  capsule they produced. They now use a copy like every other test; the
+  coverage that accident provided is replaced by the explicit provenance test
+  above.
 
 ## [0.2.0] — 2026-11-06
 

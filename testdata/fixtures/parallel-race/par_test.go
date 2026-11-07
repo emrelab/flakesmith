@@ -138,7 +138,7 @@ func enter(t *testing.T, victim bool) {
 		case <-timer.C:
 			// Nobody came. That is only legitimate when this run really has no
 			// sibling; the contract test asserts this line never shows up for
-			// runs that do (see internal/cli/fixture_parallel_race_test.go).
+			// runs that do (see internal/cli/huntevidence/evidence_fixture_test.go).
 			t.Log("overlap-window expired: no sibling arrived")
 		}
 		timer.Stop()

@@ -1,4 +1,4 @@
-package cli_test
+package clihuntci
 
 import (
 	"path/filepath"
@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/emrelab/flakesmith/internal/capsule"
+	"github.com/emrelab/flakesmith/internal/clitest"
 	"github.com/emrelab/flakesmith/internal/domain"
 )
 
@@ -16,14 +17,14 @@ func TestHuntBaselineGatesOnNewFlakesOnly(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test")
 	}
-	dir := fixtureDir(t, "order-basic")
+	dir := clitest.FixtureDir(t, "order-basic")
 	// The default baseline path is relative to the invoked dir: the test's cwd
 	// must be temporary so nothing is written into the repo or testdata.
 	work := t.TempDir()
 	t.Chdir(work)
 	store := filepath.Join(t.TempDir(), "c")
 
-	code, _, stderr := run("hunt", dir, "--capsule-dir", store, "--write-baseline")
+	code, _, stderr := clitest.Run("hunt", dir, "--capsule-dir", store, "--write-baseline")
 	if code != domain.ExitOK {
 		t.Fatalf("--write-baseline: code = %d (stderr=%s)", code, stderr)
 	}
@@ -37,7 +38,7 @@ func TestHuntBaselineGatesOnNewFlakesOnly(t *testing.T) {
 	}
 
 	// 1) Known flake: the gate is green, but the flake is still reported.
-	code, stdout, stderr := run("hunt", dir, "--capsule-dir", store,
+	code, stdout, stderr := clitest.Run("hunt", dir, "--capsule-dir", store,
 		"--baseline", path, "--fail-on-flake")
 	if code != domain.ExitOK {
 		t.Fatalf("known flake broke the gate: code = %d (stderr=%s)", code, stderr)
@@ -59,7 +60,7 @@ func TestHuntBaselineGatesOnNewFlakesOnly(t *testing.T) {
 	if err := capsule.WriteBaseline(foreign, []string{"fs_000000000000"}); err != nil {
 		t.Fatal(err)
 	}
-	code, _, stderr = run("hunt", dir, "--capsule-dir", store,
+	code, _, stderr = clitest.Run("hunt", dir, "--capsule-dir", store,
 		"--baseline", foreign, "--fail-on-flake")
 	if code != domain.ExitFlakeFound {
 		t.Fatalf("new flake did not break the gate: code = %d, want %d (stderr=%s)",
@@ -73,8 +74,8 @@ func TestHuntBaselineGatesOnNewFlakesOnly(t *testing.T) {
 // A missing baseline file is never guessed: if the user made a typo, a
 // "clean" result would hide that nothing was compared.
 func TestHuntMissingBaselineIsUsageError(t *testing.T) {
-	dir := fixtureDir(t, "clean")
-	code, _, stderr := run("hunt", dir, "--baseline", filepath.Join(t.TempDir(), "missing.json"))
+	dir := clitest.FixtureDir(t, "clean")
+	code, _, stderr := clitest.Run("hunt", dir, "--baseline", filepath.Join(t.TempDir(), "missing.json"))
 	if code != domain.ExitUsage {
 		t.Fatalf("code = %d, want %d (stderr=%s)", code, domain.ExitUsage, stderr)
 	}

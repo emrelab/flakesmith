@@ -1,8 +1,10 @@
 name: nightly
 
 # The full -count=10 repeat sweep on all three OSes. On PRs ci.yml runs
-# -count=3 per OS; a leak that only surfaces on the 7th run is the nightly's
-# job to catch. Local equivalent: `make test-repeat`.
+# -count=3 on the unit/probe packages and the integration layer
+# (internal/cli/...) once; a leak that only surfaces on the 7th run, or one
+# that needs repeats in the subprocess-driven layer, is the nightly's job.
+# Local equivalent: `make test-repeat`.
 
 on:
   schedule:

@@ -51,15 +51,23 @@ jobs:
         run: go test -timeout 15m -race ./...
 
       # The tool itself must not produce flakes. A state leak is caught here.
-      # Per-PR sweep is -count=3: the full -count=10 sweep roughly triples
-      # wall time on every PR for marginal recall; nightly.yml carries it.
+      #
+      # Where the repeat sweep applies, and why not everywhere: -count=N exists
+      # to surface state that survives between runs inside one process. That is
+      # cheap and decisive in the unit and probe packages. The integration layer
+      # (internal/cli/...) instead spawns real `go test` subprocesses; repeating
+      # it three times per OS multiplied the spawns by three for no signal — no
+      # CI failure to date came from a repeat-only leak there — while the
+      # nightly's `-count=10` sweep covers the same ground better. PR runs it
+      # once; nightly repeats it.
+      #
+      # Measured on windows-latest before this split: the sweep step was 13-18m.
       - name: test (repeat, flake hunt)
-        # Same reasoning one sweep deeper: -count=3 multiplies the subprocess
-        # spawns. Measured on windows-latest: 13m02s, 30m is ~2.3x headroom.
-        # (Before the parallel-race fixture stopped paying a fixed window this
-        # step needed 40m — issue #12. If it creeps back up, suspect a fixture
-        # that sleeps, not a timeout that is too small.)
-        run: go test -timeout 30m -count=3 ./...
+        run: |
+          # -timeout applies per package; the sweep multiplies the subprocess
+          # spawns, so keep the headroom the old single invocation had.
+          go test -timeout 30m -count=3 $(go list ./... | grep -v '/internal/cli')
+          go test -timeout 15m -count=1 ./internal/cli/...
 
       - name: fixtures
         run: make fixtures

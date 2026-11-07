@@ -24,7 +24,7 @@ were load-sensitive: a squeeze under load looked like "no parallel flake", the
 hunter honestly refused the witness, and the fixture itself flaked (issue #12).
 
 The contract is asserted by `TestParallelRaceFixtureContract`
-(`internal/cli/fixture_parallel_race_test.go`): serial passes, overlap fails on
+(`internal/cli/huntevidence/evidence_fixture_test.go`): serial passes, overlap fails on
 the victim only, the victim alone passes, the fallback deadline is never paid
 when a sibling was selected, and a solo run costs no more than the serial
 baseline. That last clause is the one that fails if a fixed wait comes back.

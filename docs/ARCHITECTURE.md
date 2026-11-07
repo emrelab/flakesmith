@@ -890,7 +890,18 @@ The generated test file is compared byte-by-byte (`testdata/golden/*.go`). Code-
 
 - Integration tests are skipped with `testing.Short()`; a separate CI job.
 - No test depends on real time/ports/network.
-- PRs run `-count=3` on three OSes; the full `-count=10` sweep runs nightly (`nightly.yml`); CI also runs our own tool against our own repo (`self-hunt` job) — dogfooding.
+- PRs run `-count=3` on the unit/probe packages and the integration layer once per OS; the full `-count=10` sweep runs nightly (`nightly.yml`); CI also runs our own tool against our own repo (`self-hunt` job) — dogfooding.
+
+### 11.5. Why the CLI's integration tests live in their own packages
+
+`internal/cli/hunt`, `huntci`, `huntevidence`, `compile`, `replay` and `surface` are test-only packages; the shared harness is `internal/clitest`. Nothing here is a product package — the split is a scheduling decision.
+
+Every CLI integration test spawns real `go test` subprocesses (a single `hunt` on `order-basic` spawns 33 `go` processes), and the suite used to be one package: `go test` runs tests *inside* a package serially, so 38 subprocess-driven tests took 185 s on one core and the same 185 s again on every CI OS. Split across packages, `go test ./...` schedules them in parallel — `-p` is the CPU count — and the same assertions finish in ~50 s. The cost measurement is reproducible: `make cost` prints wall time and the number of `go` invocations.
+
+Two rules keep the split from becoming a hiding place:
+
+- **A test moves, it does not disappear.** The acceptance criterion for any further split is that the set of test names (subtests included) before and after is identical, checked from `go test -json`, not by eye.
+- **Coverage needs `-coverpkg`.** With the tests in a neighbouring package, `go test -coverprofile ./...` measures each package only with the tests physically inside it; `internal/cli` would read as ~0% while its tests all live next door. `make cover` passes `-coverpkg=./...` for that reason (measured: 51% without, 82% with).
 
 ---
 

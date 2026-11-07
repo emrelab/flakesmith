@@ -1,4 +1,4 @@
-package cli_test
+package clihuntci
 
 import (
 	"os"
@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/emrelab/flakesmith/internal/clitest"
 	"github.com/emrelab/flakesmith/internal/domain"
 )
 
@@ -108,7 +109,7 @@ func TestHuntChangedScansOnlyChangedPackage(t *testing.T) {
 		{"hunt", "--changed", "--base", "HEAD~1", "-v", "-capsule-dir", store},
 		{"hunt", "--changed", "-v", "-capsule-dir", store},
 	} {
-		code, stdout, stderr := run(args...)
+		code, stdout, stderr := clitest.Run(args...)
 		if code != domain.ExitOK {
 			t.Fatalf("%v: code = %d (stdout=%s stderr=%s)", args, code, stdout, stderr)
 		}
@@ -134,7 +135,7 @@ func TestHuntChangedScansOnlyChangedPackage(t *testing.T) {
 // reads in CI as "--changed passed" and hides that nothing was scanned.
 func TestHuntChangedOutsideGitIsUsageError(t *testing.T) {
 	t.Chdir(t.TempDir())
-	code, _, stderr := run("hunt", "--changed")
+	code, _, stderr := clitest.Run("hunt", "--changed")
 	if code != domain.ExitUsage {
 		t.Fatalf("code = %d, want %d", code, domain.ExitUsage)
 	}
@@ -147,7 +148,7 @@ func TestHuntChangedOutsideGitIsUsageError(t *testing.T) {
 func TestHuntChangedRejectsUnknownBase(t *testing.T) {
 	repo := gitRepo(t)
 	t.Chdir(repo)
-	code, _, stderr := run("hunt", "--changed", "--base", "no-such-ref")
+	code, _, stderr := clitest.Run("hunt", "--changed", "--base", "no-such-ref")
 	if code != domain.ExitUsage {
 		t.Fatalf("code = %d, want %d (stderr=%s)", code, domain.ExitUsage, stderr)
 	}

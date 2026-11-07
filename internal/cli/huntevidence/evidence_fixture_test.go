@@ -1,4 +1,4 @@
-package cli_test
+package clihuntevidence
 
 import (
 	"os"
@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/emrelab/flakesmith/internal/clitest"
 )
 
 // The parallel-race fixture is the instrument every concurrency claim is
@@ -28,7 +30,7 @@ func TestParallelRaceFixtureContract(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test")
 	}
-	dir := fixtureDir(t, "parallel-race")
+	dir := clitest.FixtureDir(t, "parallel-race")
 
 	goTest := func(t *testing.T, args ...string) (pass bool, out string) {
 		t.Helper()
