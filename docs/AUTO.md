@@ -237,6 +237,16 @@ Every tick's report is delivered to **Telegram** (`telegram:1590860965`), the
 same channel failures go to; a `deliver: origin` target would make a 03:00
 failure invisible in a desktop chat nobody is reading.
 
+The job is pinned to `deepseek-v4.1-flash` at `--reasoning-effort high` on the
+`custom` provider (Evren LLM, `https://evren-llmapi.ssyz.org.tr/v1`). Pinned
+per job, not globally: the reasoning budget is the job's, and a later
+`hermes model` change must not silently move an unattended worker to a cheaper
+model. Verify the route without firing the job:
+
+```
+hermes cron list                       # model + provider per job
+```
+
 The job is created **paused**. To drain the queue:
 
 ```
