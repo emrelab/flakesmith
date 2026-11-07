@@ -191,9 +191,27 @@ next: #M <title> | KUYRUK BOS | BLOCKED #N <one-line reason>
 Append the lines for each issue handled. No prose, no plan, no apology, no
 "let me know if". An unattended run's reader wants the four facts.
 
-## 10. Manual trigger
+## 10. How a run is started
 
-There is deliberately **no cron**. A human starts a run:
+A human arms it; the system finishes on its own. Two entry points, one rulebook.
+
+**Scheduled (draining mode).** A Hermes cron job `flakesmith-oto-issue`
+(`926d39926d48`) runs every 2 h, one issue per tick, and is **gated by a
+monitor** (`~/.hermes/scripts/flakesmith-queue.sh`): its output is the picked
+issue line, `BUSY` on a dirty tree, or `EMPTY`. Identical output across ticks
+suppresses the agent entirely, so an idle queue costs nothing — the monitor, not
+the pause, is the real cost guard.
+
+The job is created **paused**. To drain the queue:
+
+```
+hermes → "flakesmith kuyruğunu aç"        (cronjob_manage action=resume, job 926d39926d48)
+```
+
+It pauses itself when `next.sh` returns 3 (`KUYRUK BOS`), so a finished queue
+does not keep a timer alive. Re-arm it the same way after promoting new issues.
+
+**Manual (one shot).** For a single supervised run:
 
 ```
 make auto              # MAX_ISSUES=2
@@ -202,7 +220,10 @@ make auto-next         # just show what would be picked
 make auto-verify       # just run the gate
 ```
 
-Reason: this repo's issues need design judgement in the majority of cases
-(#13, #19, #23), and a timer would run out of `auto:safe` work and start
-inventing it. The queue is finite by construction; when `next.sh` returns 3 the
-system is *finished* until a human promotes a new issue.
+Both paths obey §0–§8 identically; the only difference is who fires them.
+
+Why the queue is finite by design: most of this repo's issues need design
+judgement (#13, #19, #23) and live at `auto:review`. A worker that is allowed to
+invent `auto:safe` work to keep a timer busy is the drift this system exists to
+prevent — when `next.sh` returns 3 the system is *finished* until a human
+promotes a new issue.
