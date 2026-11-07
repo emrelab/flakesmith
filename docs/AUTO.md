@@ -35,7 +35,19 @@ git rev-parse --abbrev-ref HEAD  # must be main
 
 A dirty tree means another worker (or a human) owns the repo. Exit immediately
 and touch nothing — this is the writer lock. Always `git fetch --prune origin`
-and branch from `origin/main`, never from a local `main` that may be stale.
+first, then ask `scripts/auto/base.sh` which ref to branch from — never decide
+this yourself:
+
+```
+scripts/auto/base.sh      # prints "main" (local is ahead of origin) or "origin/main"
+```
+
+The hazard is a *stale* local `main`; branching from it silently drops other
+people's work. A local `main` that is **ahead** is the opposite: it carries
+commits (this harness, these rules) that `origin/main` does not, and branching
+from `origin/main` there would erase `scripts/auto/` and `docs/AUTO.md` from the
+worktree. Exit 4 from `base.sh` means the two diverged — a human must rebase;
+report it and stop.
 
 ## 2. Pick exactly one issue
 
@@ -61,7 +73,8 @@ gh issue comment N --body "auto-run başladı: <sha> üzerinden <branch>"
 Claiming first is what makes two concurrent runs impossible. Then:
 
 ```
-git switch -c auto/issue-N origin/main
+base=$(scripts/auto/base.sh) || { echo "DIVERGED base"; exit; }
+git switch -c auto/issue-N "$base"
 ```
 
 ## 4. Do the work the issue describes
@@ -149,7 +162,7 @@ Before merging, re-assert the tier boundary on the remote branch — the gate ra
 locally, so this is the independent check:
 
 ```
-git diff --name-only origin/main...HEAD | grep -E '^\.github/|^action\.yml$' && fail
+git diff --name-only "$(scripts/auto/base.sh)"...HEAD | grep -E '^\.github/|^action\.yml$' && fail
 ```
 
 Any output means a CI file is in the diff: shut it down, whether or not

@@ -43,9 +43,11 @@ if ! scripts/auto/next.sh >/dev/null; then
   exit 0
 fi
 
-PROMPT="Read docs/AUTO.md in full first; it is the only source of truth and it wins on any conflict. Execute ONE autonomous run with MAX_ISSUES=${MAX}. Report exactly the four lines per issue defined in §9 and nothing else."
+base=$(scripts/auto/base.sh) || { echo "base ref undetermined — resolve by hand" >&2; exit 3; }
 
-printf 'starting autonomous run: MAX_ISSUES=%s at %s\n' "$MAX" "$(date '+%F %T')"
+PROMPT="Read docs/AUTO.md in full first; it is the only source of truth and it wins on any conflict. Execute ONE autonomous run with MAX_ISSUES=${MAX}. Branch from '${base}' (scripts/auto/base.sh says why). Report exactly the four lines per issue defined in §9 and nothing else."
+
+printf 'starting autonomous run: MAX_ISSUES=%s base=%s at %s\n' "$MAX" "$base" "$(date '+%F %T')"
 
 exec hermes chat --oneshot --yolo \
   --max-turns 400 \

@@ -31,7 +31,8 @@ fail() {
 }
 step() { printf '\n== %s\n' "$1"; }
 
-base=$(git rev-parse --verify --quiet origin/main >/dev/null 2>&1 && echo origin/main || echo HEAD)
+base=$(scripts/auto/base.sh) || fail "cannot determine the base ref (diverged main?) — resolve by hand"
+printf 'diff base: %s\n' "$base"
 
 # ---------------------------------------------------------------- 1. guards
 # Cosmetic, mechanical, and each one is a way an unattended run corrupts a repo
