@@ -1,6 +1,7 @@
 package probe_test
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -29,6 +30,35 @@ func TestDefaultCrossIsLastAndOptIn(t *testing.T) {
 	got := names(probe.Default(probe.Config{PolluterDir: "fixture/polluter"}))
 	if len(got) == 0 || got[len(got)-1] != "order-cross" {
 		t.Fatalf("order-cross must be last, got %v", got)
+	}
+}
+
+// TestDefaultPassesTheConfigThrough asserts the other half of the single
+// definition: Default owns the list, but the caller still owns the knobs. A
+// transposed field here would silently hunt with the wrong -count or seeds and
+// no order test would notice, so each value is read back off the probe itself.
+func TestDefaultPassesTheConfigThrough(t *testing.T) {
+	seeds := []int64{7, 11, 13}
+	reg := probe.Default(probe.Config{Repeat: 3, Seeds: seeds})
+
+	var repeat *probe.Repeat
+	var order *probe.Order
+	for _, p := range reg.Probes() {
+		switch v := p.(type) {
+		case probe.Repeat:
+			repeat = &v
+		case probe.Order:
+			order = &v
+		}
+	}
+	if repeat == nil || order == nil {
+		t.Fatalf("Default dropped a probe: %v", names(reg))
+	}
+	if repeat.Count != 3 {
+		t.Errorf("Repeat.Count = %d, want 3", repeat.Count)
+	}
+	if !slices.Equal(order.Seeds, seeds) {
+		t.Errorf("Order.Seeds = %v, want %v", order.Seeds, seeds)
 	}
 }
 

@@ -10,6 +10,10 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 - `scripts/test-cost.sh` / `make cost`: wall time, per-package time and the
   slowest tests. An operator tool for this exact tuning, not a gate — a
   wall-time assertion is the flakiness issue #12 removed.
+- `TestDefaultPassesTheConfigThrough`: `probe.Default` owns the probe list, so
+  the test reads `Repeat.Count` and `Order.Seeds` back off the registered probes
+  — a transposed `Config` field would otherwise hunt with the wrong `-count` and
+  no order assertion would notice.
 - `TestHuntRecordsCapsuleProvenance`: the capsule's `repo.commit` and
   `repo.dirty` are asserted against a repository the test owns, in both the
   struct and the JSON a CI consumer reads.
@@ -33,6 +37,17 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   and the nightly `-count=10` sweep on all three OSes still covers it.
 
 ### Fixed
+- The autonomous loop's review tier could feed itself: a run opened a PR and
+  dropped `auto:wip`, which left the issue open, still `auto:review`, and the
+  very next `next.sh` call picked it again — one design re-proposed up to
+  `MAX_ISSUES` times per tick. The review tier now also adds `auto:pr`, and the
+  picker excludes it; a human merges (or closes) the PR and clears the label to
+  put the issue back in the queue. `docs/AUTO.md` §0/§2/§7 and
+  `CONTRIBUTING.md` state the third resting state; `next.sh --selftest` covers
+  both shapes.
+- `scripts/auto/run.sh` claimed "there is no cron on purpose" while
+  `docs/AUTO.md` §10 documents the scheduled drain; the comment now names the
+  one-shot path and the cron job separately.
 - `parallel-race` fixture no longer times out into a false "no overlap": the
   barrier is a channel closed by the second arriver (the first wakes in
   microseconds) instead of a 5ms poll of a counter for a fixed 2s. The 30s

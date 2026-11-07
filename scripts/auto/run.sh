@@ -3,9 +3,11 @@
 #
 #   scripts/auto/run.sh [MAX_ISSUES]     default 2
 #
-# There is no cron on purpose: most of this repo's open issues need a design
-# decision, and a timer with a finite queue eventually invents work. A human
-# starts the run; the run is bounded and reports four lines per issue.
+# There is no timer here on purpose: most of this repo's open issues need a
+# design decision, and a timer with a finite queue eventually invents work. This
+# script is the supervised one-shot path (docs/AUTO.md §10 "Manual"); the
+# scheduled drain lives in the Hermes cron job `flakesmith-oto-issue` and obeys
+# the same rulebook. A human arms both; neither runs past the queue.
 #
 # --yolo is required: an unattended run cannot answer approval prompts. That is
 # why the pre-flight below refuses to start on a dirty tree — the blast radius

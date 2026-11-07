@@ -18,6 +18,7 @@ tracker is the queue: the worker may never add work to it, only close it.
 | `auto:review` | Needs a design decision — the run stops at an open PR | Human |
 | `P1` | Priority override; beats age | Human |
 | `auto:wip` | Claimed by a live run. Never touch a second time | Worker |
+| `auto:pr` | A PR is open and a human has not merged it. Never touch a second time | Worker |
 | `auto:blocked` | The run could not finish it; a comment says why | Worker |
 
 The worker **never** adds `auto:safe` / `auto:review` / `P1`, never reorders,
@@ -73,10 +74,16 @@ forever. The age bucket is what makes the failure visible.
 scripts/auto/next.sh
 ```
 
-That script is the only picker: `auto:safe` ∪ `auto:review`, minus `auto:wip`
-and `auto:blocked`, ordered `P1` first, then tier (`auto:safe` before
+That script is the only picker: `auto:safe` ∪ `auto:review`, minus `auto:wip`,
+`auto:blocked` and `auto:pr`, ordered `P1` first, then tier (`auto:safe` before
 `auto:review`), then oldest. Exit code 3 means the queue is empty → print
 `KUYRUK BOS`, touch nothing, end the run.
+
+`auto:pr` exists so the review tier cannot feed itself: its run ends by opening
+a PR and dropping `auto:wip`, and an issue that is still open and still
+`auto:review` would otherwise be the very next pick — the same design done
+twice, then six times per tick. A human merges (or closes) the PR and removes
+`auto:pr`; that is the only way the issue returns to the queue.
 
 Do not pick a different issue because the picked one looks hard. Do not pick
 two. If it is hard, that is the `auto:blocked` path.
@@ -186,12 +193,19 @@ git diff --name-only "$(scripts/auto/base.sh)"...HEAD | grep -E '^\.github/|^act
 Any output means a CI file is in the diff: shut it down, whether or not
 `verify.sh` said green.
 
-**`auto:review`** — never merge, ever. Comment the PR link on the issue, remove
-`auto:wip`, and continue to the next issue. That tier exists so a human reads
-the design diff before it lands on `main`.
+**`auto:review`** — never merge, ever. Comment the PR link on the issue, add
+`auto:pr`, remove `auto:wip`, and continue to the next issue. That tier exists
+so a human reads the design diff before it lands on `main`.
 
-Either way, the issue must end in one of exactly two states: **closed by the
-merge** or **open with an `auto:blocked` comment**.
+`auto:pr` is not decoration: it is what makes "continue to the next issue"
+finite. Dropping `auto:wip` alone hands the same issue straight back to
+`next.sh`, so the run would re-propose the design it just proposed. The issue
+stays out of the queue until a human merges or closes the PR and clears the
+label.
+
+Either way, the issue must end in exactly one of three states: **closed by the
+merge**, **open with `auto:pr` and a PR link** (review tier), or **open with an
+`auto:blocked` comment**. Never open with a bare `auto:wip`.
 
 ## 8. Stop conditions
 

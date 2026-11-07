@@ -67,7 +67,8 @@ the rules live in one file, `docs/AUTO.md`.
 
 - The queue **is** the issue tracker. `auto:safe` ships itself on green CI;
   `auto:review` stops at an open PR for a human. `auto:wip` means a run holds
-  it, `auto:blocked` means a run gave up and said why. `P1` overrides the order.
+  it, `auto:pr` means its PR is waiting for a human, `auto:blocked` means a run
+  gave up and said why. `P1` overrides the order.
 - Only a human applies `auto:safe` / `auto:review` / `P1`. A run may never
   promote its own work.
 - A run starts on demand — `make auto` or the `flakesmith-oto-issue` cron —
