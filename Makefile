@@ -1,4 +1,4 @@
-.PHONY: all build test test-repeat cost vet fmt cover fixtures clean run smoke auto auto-next auto-verify
+.PHONY: all build test test-repeat cost vet fmt cover fixtures clean run smoke auto auto-next auto-verify auto-digest
 
 BINARY := flakesmith
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
@@ -38,6 +38,12 @@ auto-next:
 
 auto-verify:
 	scripts/auto/verify.sh
+
+# The human's half of the loop: open auto/* PRs with their CI state, blocked
+# issues, and whether the cron is armed for a queue that still has work.
+# Read-only, and NOT a monitor — its output changes every hour by design.
+auto-digest:
+	scripts/auto/digest.sh
 
 vet:
 	go vet ./...

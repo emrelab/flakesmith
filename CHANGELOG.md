@@ -7,6 +7,18 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- `scripts/auto/land.sh`: the independent verdict for a direct push. Waits for
+  the check runs on a `main` commit, calls green only when every run concluded
+  `SUCCESS`/`NEUTRAL`, and on red reverts, pushes the revert and exits 1. Exit 2
+  is inconclusive (no check run, or none concluded in time) and never reverts —
+  undoing work that may have been fine is worse than a late human look.
+- `scripts/auto/digest.sh` / `make auto-digest`: the human's half of the
+  autonomous loop in one screen — open `auto/*` PRs with age, CI verdict,
+  mergeability and diffstat; `main`'s own CI verdict and recent reverts;
+  `auto:blocked` issues; and the cron's state with the two mismatches worth
+  naming (paused with work queued, armed on an empty queue). Read-only:
+  `gh pr list`, `gh issue list`, `gh api` and one `jq` read, no writes.
+  `docs/AUTO.md` §11 says why a run cannot report this itself.
 - `docs/CI-REPRO.md`: the CI glue for a red `go test` log — capture the `-json`
   log as an artifact, `repro --from-json` it, post one upserted PR comment with
   the witness. Comments only on exit 0: exit 3/4 means no witness, and silence is
@@ -26,6 +38,12 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   the AST scanner must see through (`x =`, `x.f =`, `x[i] =`, `*p =`, `(x) =`).
 
 ### Changed
+- `auto:safe` no longer opens a PR: after `verify.sh --tier safe` it pushes
+  `auto/issue-N:main` (explicit refspec, never forced) and `land.sh` takes the
+  CI verdict, reverting on red. A PR paid for CI before touching `main`; this
+  pays after, which is the whole trade — mechanical work is cheap to revert,
+  and the review tier keeps the PR because a design decision is not.
+  `docs/AUTO.md` §7 states both tiers, §8.4 the new stop condition.
 - The CLI's integration suite is split into six test-only packages —
   `internal/cli/{hunt,huntci,huntevidence,compile,replay,surface}` — over a
   shared `internal/clitest` harness. `go test` runs tests inside a package

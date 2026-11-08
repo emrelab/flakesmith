@@ -144,15 +144,15 @@ judgement call.
 - "Syncing the expectation to the actual output" — the actual output is the
   suspect, not the oracle.
 - Touching `.github/workflows/` or `action.yml` on an **`auto:safe`** issue. A
-  safe run auto-merges; a CI edit there would mean merging its own weakened
-  gate. At `auto:review` the edit is allowed — a human merges that tier — and
-  the PR body must list every CI line changed. If the issue turns out to need
-  CI work while it is labelled `auto:safe`: stop, `[~]`, comment, block. Do not
-  move the label yourself.
+  safe run pushes straight to `main`; a CI edit there would mean shipping its
+  own weakened gate with no human in between. At `auto:review` the edit is
+  allowed — a human merges that tier — and the PR body must list every CI line
+  changed. If the issue turns out to need CI work while it is labelled
+  `auto:safe`: stop, `[~]`, comment, block. Do not move the label yourself.
 - Adding a `require` line to `go.mod`, or any new dependency.
 - Generating code and hand-editing the *generated* file.
 
-## 6. Commit, push, PR
+## 6. Commit, then land by tier
 
 ```
 git add -A            # then: git status --porcelain  →  the tree must be clean
@@ -162,6 +162,53 @@ git commit -m "pkg: what was done" -m "Closes #N"
 Message format is `CONTRIBUTING.md`'s: `package: what was done`, imperative,
 one topic. The body carries `Closes #N`.
 
+The commit is identical for both tiers. What happens to it is not (§7).
+
+## 7. Landing policy — two tiers, decided by label
+
+The gate in §5 runs locally. CI is the *independent* verdict, and the two tiers
+buy it at different prices: a PR pays for it before anything reaches `main`, a
+direct push pays for it after. `auto:safe` accepts that price because the work
+is mechanical and a revert is cheap; `auto:review` does not, because a design
+decision is not cheap to un-merge.
+
+**`auto:safe` — push to `main`, then let CI judge, and revert if it says no.**
+
+```
+# last moment the tier boundary is checked on the exact tree being pushed
+git diff --name-only "$(scripts/auto/base.sh)" -- .github/workflows action.yml | grep -q . && fail
+
+git push origin auto/issue-N:main      # never --force, never --force-with-lease
+git switch main && git fetch -q origin && git reset --hard -q origin/main
+
+scripts/auto/land.sh "$(git rev-parse HEAD)"     # waits, then decides
+```
+
+Three things this sequence is careful about:
+
+- The push names the refspec explicitly (`auto/issue-N:main`), so it is a
+  fast-forward or a rejection. A `main` that moved under the run rejects the
+  push — the run then does **not** retry, rebase, or force: it reports and marks
+  the issue `auto:blocked`. Someone else's work is never rebased away by a
+  worker.
+- `land.sh` owns the definition of green: every check run concluded, and every
+  conclusion is `SUCCESS` or `NEUTRAL`. `SKIPPED` and `CANCELLED` are **not**
+  green (§5's banned list already says why — a gate that never ran is not a
+  gate that passed).
+- Red means the script reverts, pushes the revert, and exits 1. The revert is a
+  new commit, so the failure stays visible in `main`'s log; a rewound `main`
+  would hide the very event worth reading.
+
+Exit 2 from `land.sh` is **inconclusive**, not red: no check run appeared, or
+none concluded within the timeout. Do not revert on it — undo work that may well
+have been fine is worse than a late human look. Report it, mark `auto:blocked`,
+stop the tick.
+
+Only after `land.sh` exits 0 is the issue done: drop `auto:wip` (the push's
+`Closes #N` closes it on merge) and go to §8.
+
+**`auto:review` — never lands, ever.**
+
 ```
 git push -u origin auto/issue-N
 gh pr create --fill --body "Closes #N" --base main
@@ -169,33 +216,9 @@ gh pr create --fill --body "Closes #N" --base main
 
 The PR body must state: what changed, which files, and how it was verified. If
 the issue named a repro or a fixture, the PR says what the new fixture asserts.
-
-## 7. Merge policy — two tiers, decided by label
-
-**`auto:safe`** — wait for CI, then merge:
-
-```
-gh pr checks --watch --interval 30      # green required
-gh pr merge --squash --delete-branch
-```
-
-Green means green: `test`, `oldest`, and `self-hunt` all pass. A skipped or
-cancelled check is not green. On red: do not merge, revert to the previous
-state, mark `auto:blocked`, put the failing output in a comment.
-
-Before merging, re-assert the tier boundary on the remote branch — the gate ran
-locally, so this is the independent check:
-
-```
-git diff --name-only "$(scripts/auto/base.sh)"...HEAD | grep -E '^\.github/|^action\.yml$' && fail
-```
-
-Any output means a CI file is in the diff: shut it down, whether or not
-`verify.sh` said green.
-
-**`auto:review`** — never merge, ever. Comment the PR link on the issue, add
-`auto:pr`, remove `auto:wip`, and continue to the next issue. That tier exists
-so a human reads the design diff before it lands on `main`.
+Then comment the PR link on the issue, add `auto:pr`, remove `auto:wip`, and
+continue to the next issue. That tier exists so a human reads the design diff
+before it lands on `main`.
 
 `auto:pr` is not decoration: it is what makes "continue to the next issue"
 finite. Dropping `auto:wip` alone hands the same issue straight back to
@@ -204,7 +227,7 @@ stays out of the queue until a human merges or closes the PR and clears the
 label.
 
 Either way, the issue must end in exactly one of three states: **closed by the
-merge**, **open with `auto:pr` and a PR link** (review tier), or **open with an
+push** (safe), **open with `auto:pr` and a PR link** (review), or **open with an
 `auto:blocked` comment**. Never open with a bare `auto:wip`.
 
 ## 8. Stop conditions
@@ -216,12 +239,21 @@ End the run, in this order of precedence:
 3. Any banned action, or a gate that cannot go green → `[~]` revert the tree,
    comment the blocker with the exact command that failed, `auto:blocked`,
    exit. Do not start the next issue: a blocker may poison the following one.
-4. `MAX_ISSUES` reached (default 2 from the launcher; the cron job sets 6) →
+4. `land.sh` exits 1 (CI red, revert pushed) or 2 (inconclusive) → comment the
+   failing check names verbatim, `auto:blocked`, end the tick. **4 ends the tick
+   like 3 does**, and for the same reason: the tree that just failed on `main`
+   is the state the next issue would inherit.
+5. `MAX_ISSUES` reached (default 2 from the launcher; the cron job sets 6) →
    stop cleanly and let the next tick continue.
 
 Never leave the tree dirty, never leave a branch half-pushed, never leave an
 issue with `auto:wip` and no live run behind it. `auto:wip` without a branch on
 the remote is a bug in the run.
+
+A red landing is not a failed run — the system worked: the gate passed locally,
+CI disagreed, and `main` is clean again. What makes it a *failure* is a red
+`main` left standing, or an issue closed by a commit that was reverted. Both are
+forbidden: after a revert, the issue must be open and `auto:blocked`.
 
 ## 9. Report
 
@@ -229,8 +261,8 @@ Four lines, nothing else. This is the entire output of a run:
 
 ```
 #N <title> — <what changed, one line>
-<commit sha> / <PR url or "merged">
-<verify.sh: green|red> <merge state>
+<commit sha> / <landed on main | PR url>
+<verify.sh: green|red> <land.sh: green|reverted|inconclusive|n/a>
 next: #M <title> | KUYRUK BOS | BLOCKED #N <one-line reason>
 ```
 
@@ -293,3 +325,41 @@ judgement (#13, #19, #23) and live at `auto:review`. A worker that is allowed to
 invent `auto:safe` work to keep a timer busy is the drift this system exists to
 prevent — when `next.sh` returns 3 the system is *finished* until a human
 promotes a new issue.
+
+## 11. The human's half: the digest
+
+§7 ends every `auto:review` run at an open PR and then goes quiet. That is the
+designed resting state, and it is also where the system can stall without
+anything failing: `main` stops moving, no error is logged, and the only
+observable is that nothing happens. A run cannot report this — it did its job.
+
+```
+scripts/auto/digest.sh          # or: make auto-digest
+scripts/auto/digest.sh --prs    # only the review queue
+scripts/auto/digest.sh --main   # only main's CI verdict
+scripts/auto/digest.sh --queue  # only the picker + cron consistency
+```
+
+Four blocks, one screen:
+
+- **review queue** — every open `auto/*` PR with its age, CI verdict,
+  mergeability and diffstat. CI is green only when every check concluded
+  successfully; a skipped check is not green here either (§7). A PR older than
+  24 h says so, because that is the moment a human is the bottleneck and no
+  further tick can help.
+- **main** — head commit, its CI verdict, and any revert in the last 20 commits.
+  Under §7 `auto:safe` lands on `main` directly, so this block is the one place
+  the cost of that policy is visible: a red `main` means the local gate and CI
+  disagreed and `land.sh`'s revert did not happen (or has not yet).
+- **blocked** — open `auto:blocked` issues. Removing the label is what re-queues
+  one (§0); the run itself never will.
+- **cron** — the job's state, plus the two mismatches worth naming: **paused
+  with work queued** (the queue has rested and will not move by itself) and
+  **armed with an empty queue** (harmless, one wasted tick).
+
+Read-only by construction: `gh pr list`, `gh issue list`, and a `jq` read of the
+cron record. It writes to nothing and is never a gate. It is also never a
+monitor — the output changes every hour by design, so wiring it into
+change-detection would defeat the mechanism §10 relies on. The consistent
+answer to a `MISMATCH` line is a human action (re-arm the queue, or promote
+new issues), not a change to this script.
