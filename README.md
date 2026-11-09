@@ -150,6 +150,13 @@ also takes `--pkg DIR`, `--print`, `--dry-run` and `--verify`.
 the capsule's `verifyStatus`, and exits 3 unless the artifact actually turned
 red. A skipped run is never a green verification.
 
+`replay` makes the same distinction on the other side of the contract: a witness
+that no longer fails is exit 3 ("may already be fixed"), a witness whose package
+no longer **compiles** is exit 6. Reading the second as the first is how a
+mid-refactor tree deletes a real capsule. The witness function name comes from
+the capsule, so a package that already defines `TestFlakeWitness` replays under
+the name the hunt actually used (`TestFlakeWitness_2`).
+
 `--race` never narrows the search: the witness is found without race, then
 verified once with `-race`. If it does not reproduce, the capsule's `"race"`
 field stays `false` and the report adds a "not reproduced under a race run"

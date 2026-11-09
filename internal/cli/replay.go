@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -70,6 +71,7 @@ func replayCmd(ctx context.Context, args []string, out IO) error {
 	if err != nil {
 		return err
 	}
+	fn := replayFuncName(c, f)
 
 	spec := domain.RunSpec{
 		Package:  pkgDir,
@@ -95,7 +97,7 @@ func replayCmd(ctx context.Context, args []string, out IO) error {
 		spec.RunRegex = "^" + c.Witness.Victim.Name + "$"
 		spec.Count = replayRepeatCount(c)
 	default:
-		spec.RunRegex = "^" + domain.WitnessFuncName + "$"
+		spec.RunRegex = "^" + fn + "$"
 		spec.Parallel = c.Witness.Flags.Parallel
 		if spec.Parallel <= 0 {
 			spec.Parallel = 1
@@ -110,6 +112,9 @@ func replayCmd(ctx context.Context, args []string, out IO) error {
 			if err != nil {
 				return false, err
 			}
+			if res.BuildFailed {
+				return false, buildFailure(pkgDir, res)
+			}
 			return res.Failed(c.Witness.Victim.Name), nil
 		default:
 			// Witness chain: the verdict is in the subtest, not the parent test.
@@ -119,7 +124,7 @@ func replayCmd(ctx context.Context, args []string, out IO) error {
 			}
 			defer unlock()
 
-			h, err := installForKind(pkgDir, clause, c)
+			h, err := installForKind(pkgDir, clause, fn, c)
 			if err != nil {
 				return false, err
 			}
@@ -130,7 +135,13 @@ func replayCmd(ctx context.Context, args []string, out IO) error {
 			if err != nil {
 				return false, err
 			}
-			return res.Failed(domain.WitnessSubtest(domain.WitnessFuncName, c.Witness.Victim.Name)), nil
+			if res.BuildFailed {
+				// A package that does not compile did not "stop reproducing":
+				// the witness could not be built at all. Reporting the old
+				// "stale capsule" line here told the user their flake was gone.
+				return false, buildFailure(pkgDir, res)
+			}
+			return res.Failed(domain.WitnessSubtest(fn, c.Witness.Victim.Name)), nil
 		}
 	}
 
@@ -153,8 +164,17 @@ func replayCmd(ctx context.Context, args []string, out IO) error {
 	_, _ = fmt.Fprintf(out.Stdout, "\ncapsule: %s (%s)\n", c.ID, c.Kind)
 	_, _ = fmt.Fprintf(out.Stdout, "victim : %s\n", c.Witness.Victim.Name)
 	_, _ = fmt.Fprintf(out.Stdout, "run    : %d/%d reproduced\n", failed, n)
+
+	// An interrupted replay has no verdict. Without this the run fell through to
+	// "0/N reproduced → the flake may already be fixed", i.e. a build error read
+	// as a fixed flake — the one wrong answer this command exists to avoid.
 	if firstErr != nil {
-		_, _ = fmt.Fprintf(out.Stdout, "error  : %v\n", firstErr)
+		if errors.Is(firstErr, domain.ErrBuildFailed) {
+			_, _ = fmt.Fprintln(out.Stdout, "result : package does not build — the witness could not be run")
+		} else {
+			_, _ = fmt.Fprintf(out.Stdout, "result : %v\n", firstErr)
+		}
+		return firstErr
 	}
 
 	switch {
@@ -171,15 +191,45 @@ func replayCmd(ctx context.Context, args []string, out IO) error {
 }
 
 // installForKind writes the witness with the template its class needs.
-func installForKind(pkgDir, clause string, c domain.Capsule) (*harness.Harness, error) {
+func installForKind(pkgDir, clause, fn string, c domain.Capsule) (*harness.Harness, error) {
 	steps := c.Witness.Steps
 	if len(steps) == 0 {
 		steps = []domain.Step{{Label: domain.VictimLabel(c.Witness.Victim.Name), Test: c.Witness.Victim}}
 	}
 	if c.Kind == domain.KindParallel {
-		return harness.InstallParallel(pkgDir, clause, domain.WitnessFuncName, steps, "replay")
+		return harness.InstallParallel(pkgDir, clause, fn, steps, "replay")
 	}
-	return harness.Install(pkgDir, clause, domain.WitnessFuncName, steps, "replay")
+	return harness.Install(pkgDir, clause, fn, steps, "replay")
+}
+
+// replayFuncName is the witness function to install, decided in ONE place.
+//
+// A capsule written by a current build carries the name the hunt actually used
+// (Witness.Func) — that is what makes replay faithful: the hunt may have picked
+// TestFlakeWitness_2 because the package already defines TestFlakeWitness, and
+// re-deriving it from a package that changed since would install a colliding
+// file, break the build, and read as "the flake is gone".
+//
+// An older capsule (no Func) gets the best available answer: the same
+// collision-free choice the hunt would make today.
+func replayFuncName(c domain.Capsule, f facts.PkgFacts) string {
+	if n := c.Witness.Func; n != "" {
+		return n
+	}
+	return harness.FuncName(f.Clause)
+}
+
+// buildFailure turns an uncompilable package into the exit-6 verdict.
+//
+// Distinguishing it from "did not reproduce" matters: a user who deleted a
+// helper or is mid-refactor must not read the resulting build error as "the
+// flake has been fixed, drop the capsule".
+func buildFailure(pkgDir string, res *domain.RunResult) error {
+	detail := firstBuildLine(res.BuildOutput)
+	if detail == "" {
+		detail = pkgDir
+	}
+	return domain.Wrap(domain.ErrBuildFailed, "%s", detail)
 }
 
 // replayRepeatCount is the -count a repeat witness has to run with.

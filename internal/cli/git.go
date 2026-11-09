@@ -5,6 +5,7 @@ import (
 	"context"
 	"os/exec"
 	"strings"
+	"time"
 )
 
 // gitOutput runs one git command in dir and returns its trimmed stdout.
@@ -37,20 +38,69 @@ type gitError struct {
 func (e *gitError) Error() string { return e.msg }
 func (e *gitError) Unwrap() error { return e.err }
 
-// gitState returns the short commit and whether the worktree is dirty.
+// gitTimeout bounds each provenance command. A capsule must never be the reason
+// a scan hangs: an index.lock left by a crashed GUI, a network-mounted checkout
+// or a pre-commit hook that shells out can make `git status` block for minutes.
+const gitTimeout = 10 * time.Second
+
+// repoState is the code state a capsule records: module path, short commit and
+// whether the worktree was dirty.
+//
+// One struct, not three queries, because every capsule in a hunt asks the same
+// question about the same directory: baseCapsule used to run `git rev-parse` and
+// `git status` a SECOND time for every capsule it wrote, on top of the pair the
+// witness path already paid.
+type repoState struct {
+	Module string
+	Commit string
+	Dirty  bool
+}
+
+// readRepoState collects the provenance a capsule carries.
 //
 // Best-effort on purpose: a capsule outside a git repo is still useful, so a
 // missing git must not fail the hunt. It only weakens the id's stability.
-func gitState(dir string) (string, bool) {
-	commit := "unknown"
-	if out, err := exec.Command("git", "-C", dir, "rev-parse", "--short", "HEAD").Output(); err == nil {
-		if s := strings.TrimSpace(string(out)); s != "" {
-			commit = s
+func readRepoState(ctx context.Context, dir string) repoState {
+	st := repoState{Module: modulePath(dir), Commit: "unknown"}
+
+	// exec.CommandContext (not .Output()) so the deadline actually kills a
+	// wedged git instead of waiting for the capsule to be written.
+	gitCtx, cancel := context.WithTimeout(ctx, gitTimeout)
+	defer cancel()
+
+	if out, err := gitOutput(gitCtx, dir, "rev-parse", "--short", "HEAD"); err == nil {
+		if s := strings.TrimSpace(out); s != "" {
+			st.Commit = s
 		}
 	}
-	dirty := false
-	if out, err := exec.Command("git", "-C", dir, "status", "--porcelain").Output(); err == nil {
-		dirty = strings.TrimSpace(string(out)) != ""
+	if out, err := gitOutput(gitCtx, dir, "status", "--porcelain"); err == nil {
+		st.Dirty = strings.TrimSpace(out) != ""
 	}
-	return commit, dirty
+	return st
+}
+
+// repoStateFor memoizes readRepoState per directory for the lifetime of one scan.
+//
+// The mutex is not decoration: packages are scanned sequentially today, but
+// `--jobs` (#23) is a planned change, and a shared map written from one
+// goroutine per package would be the first race that scheduler work hits.
+func (s *scanner) repoStateFor(ctx context.Context, dir string) repoState {
+	key := canonical(dir)
+
+	s.gitMu.Lock()
+	st, ok := s.gitState[key]
+	s.gitMu.Unlock()
+	if ok {
+		return st
+	}
+
+	st = readRepoState(ctx, dir)
+
+	s.gitMu.Lock()
+	defer s.gitMu.Unlock()
+	if s.gitState == nil {
+		s.gitState = map[string]repoState{}
+	}
+	s.gitState[key] = st
+	return st
 }

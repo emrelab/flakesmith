@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/emrelab/flakesmith/internal/capsule"
@@ -118,6 +119,11 @@ type scanner struct {
 	// pretty-printer would produce one object per capsule — not JSON.
 	collected []domain.Capsule
 	cwd       string
+	// gitState memoizes the repo provenance per package directory: every
+	// capsule a package yields shares it, and asking git again per capsule
+	// doubled the subprocess count for no new information.
+	gitMu    sync.Mutex
+	gitState map[string]repoState
 }
 
 // newScanner wires a budgeted, cached runner and the probe registry.
@@ -264,7 +270,7 @@ func (s *scanner) pkg(ctx context.Context, pkgArg string) error {
 		case stopped(ctx, err):
 			// Budget/cancel: not finding the thing is not an answer, it is an
 			// interruption. A partial capsule is written and the exit code says so.
-			return s.writePartial(t, dir, relDir, res, err)
+			return s.writePartial(ctx, t, dir, relDir, res, err)
 		case err != nil:
 			return err
 		}
@@ -281,7 +287,7 @@ func (s *scanner) pkg(ctx context.Context, pkgArg string) error {
 				probe.Target{Test: t, Dir: dir, Facts: pkgFacts}, res.Witness, s.runner)
 			if rerr != nil {
 				if stopped(ctx, rerr) {
-					return s.writePartial(t, dir, relDir, res, rerr)
+					return s.writePartial(ctx, t, dir, relDir, res, rerr)
 				}
 				return rerr
 			}
@@ -289,7 +295,7 @@ func (s *scanner) pkg(ctx context.Context, pkgArg string) error {
 			note = raceNote
 		}
 
-		c := buildCapsule(res.Witness, dir, pkgFacts, relDir, s.polluterRel())
+		c := buildCapsule(res.Witness, dir, s.repoStateFor(ctx, dir), pkgFacts, relDir, s.polluterRel())
 		c.Note = note
 		store := capsule.NewStore(capsuleDir(s.o.dir, dir))
 		path, err := store.Write(c)
@@ -517,23 +523,34 @@ func stopped(ctx context.Context, err error) bool {
 // something to inspect; a bare exit code 4 would throw away the work already
 // done. Note carries the reason because Status alone cannot distinguish "budget
 // exhausted" from "Ctrl-C".
-func (s *scanner) writePartial(t domain.TestID, dir, relDir string,
+func (s *scanner) writePartial(ctx context.Context, t domain.TestID, dir, relDir string,
 	res *probe.Result, cause error) error {
 
 	note := partialNote(cause, s.o)
-	c := buildPartialCapsule(t, dir, relDir, note)
+	c := buildPartialCapsule(t, s.repoStateFor(ctx, dir), relDir, note)
 
 	infos := attemptInfos(res)
 	path, err := capsule.NewStore(capsuleDir(s.o.dir, dir)).Write(c)
 	if err != nil {
 		return err
 	}
-	if s.o.format == "json" {
-		// The single document is written last; the partial capsule must be inside it.
+	// Every machine-readable surface must collect the partial capsule too:
+	// --format json, --format sarif and the --sarif side file all promise ONE
+	// document, and a partial result is a finding. Printing the human summary
+	// to stdout for these formats produced two documents — the leading prose
+	// made the JSON/SARIF unparseable.
+	if s.o.format == "json" || s.o.format == "sarif" || s.o.sarifPath != "" {
 		if err := s.emit(c); err != nil {
 			return err
 		}
-	} else if err := report.Partial(s.out.Stdout, c, infos, path, partialHint(cause)); err != nil {
+	}
+	if s.o.format == "json" || s.o.format == "sarif" {
+		// The single document is written by flush; the note belongs on stderr
+		// so the artifact stays clean.
+		_, _ = fmt.Fprintf(s.out.Stderr, "%s: %s\n", c.Target.Victim, c.Note)
+		return cause
+	}
+	if err := report.Partial(s.out.Stdout, c, infos, path, partialHint(cause)); err != nil {
 		return err
 	}
 	// Keep the error: the exit code (4 / 130) comes from here.
@@ -562,8 +579,8 @@ func partialHint(cause error) string {
 }
 
 // buildPartialCapsule is the artifact of a hunt that produced no witness.
-func buildPartialCapsule(t domain.TestID, dir, relDir, note string) domain.Capsule {
-	base := baseCapsule(dir)
+func buildPartialCapsule(t domain.TestID, st repoState, relDir, note string) domain.Capsule {
+	base := baseCapsule(st)
 	target := domain.Target{Package: t.Package, RelDir: relDir, Victim: t.Name}
 	c := base
 	c.Target = target
@@ -614,11 +631,8 @@ func attemptInfos(res *probe.Result) []report.AttemptInfo {
 
 // buildCapsule assembles the artifact from the verified witness plus whatever
 // static evidence the AST scan can supply.
-func buildCapsule(w *domain.Witness, dir string, f facts.PkgFacts, relDir, polluterRelDir string) domain.Capsule {
-	module := modulePath(dir)
-	commit, _ := gitState(dir)
-
-	c := baseCapsule(dir)
+func buildCapsule(w *domain.Witness, dir string, st repoState, f facts.PkgFacts, relDir, polluterRelDir string) domain.Capsule {
+	c := baseCapsule(st)
 	c.Target = domain.Target{Package: w.Victim.Package, RelDir: relDir, Victim: w.Victim.Name}
 	if pos, ok := f.TestPos[w.Victim.Name]; ok && pos.Line > 0 {
 		c.Target.VictimFile = filepath.Base(pos.File)
@@ -635,6 +649,7 @@ func buildCapsule(w *domain.Witness, dir string, f facts.PkgFacts, relDir, pollu
 		Flags:       w.Flags,
 		EnvDiff:     w.EnvDiff,
 		Runs:        w.Runs,
+		Func:        w.Func,
 		CrossBinary: w.CrossBinary,
 	}
 	c.Observation = domain.Observation{
@@ -646,20 +661,22 @@ func buildCapsule(w *domain.Witness, dir string, f facts.PkgFacts, relDir, pollu
 	c.Evidence = evidence.Build(w, f)
 	c.Status = domain.StatusConfirmed
 	c.Witness.Steps = stepsFor(w)
-	c.ID = capsule.ID(c.Witness, module, commit)
+	c.ID = capsule.ID(c.Witness, st.Module, st.Commit)
 	c.Repro.Command = reproCommand(c)
 	c.Repro.GeneratedTest = domain.PersistentFileName(targetSourceFile(dir, w.Victim.Name))
 	return c
 }
 
 // baseCapsule fills the fields every capsule shares, whatever its status.
-func baseCapsule(dir string) domain.Capsule {
-	module := modulePath(dir)
-	commit, dirty := gitState(dir)
+//
+// st is the provenance read once per package (repoStateFor): module, commit and
+// the dirty flag are facts about the run, not about the capsule, and re-reading
+// them per capsule spent four git subprocesses on the same answer.
+func baseCapsule(st repoState) domain.Capsule {
 	return domain.Capsule{
 		Schema:    domain.SchemaVersion,
 		CreatedAt: time.Now(),
-		Repo:      domain.Repo{Module: module, Commit: commit, Dirty: dirty},
+		Repo:      domain.Repo{Module: st.Module, Commit: st.Commit, Dirty: st.Dirty},
 		Tool: domain.Tool{
 			Version: Version,
 			Go:      runtime.Version(),
@@ -745,8 +762,12 @@ func reproCommand(c domain.Capsule) string {
 		if c.Witness.Flags.Race {
 			race = "-race "
 		}
+		// The witness function name comes from the capsule, never from a
+		// constant: a package that defines its own TestFlakeWitness made the
+		// probe pick TestFlakeWitness_2, and printing the bare name handed the
+		// user a command that runs THEIR test and reports a pass.
 		fmt.Fprintf(&b, "go test %s%s -run '^%s$' -count=1 -parallel=%d",
-			race, dir, domain.WitnessFuncName, parallel)
+			race, dir, c.Witness.FuncName(), parallel)
 	}
 	return b.String()
 }

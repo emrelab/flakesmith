@@ -682,6 +682,14 @@ the capsule of the committed tree it just proved, and the overwritten file carri
 the two kept apart commits or stashes before hunting — the tool does not guess which of the
 two trees a capsule belongs to.
 
+`witness.func` is excluded for the same reason, one step further out: the witness function
+name (`TestFlakeWitness`, or `TestFlakeWitness_2` when the package already defines the first
+one) is derived from the package's own test names, not from the defect. It changes when a
+user adds a test, so hashing it would re-open the same bug as a new capsule. It still has to
+travel **with** the capsule: `replay` and the printed reproduce command reinstall that file,
+and a hardcoded name collides with the user's test, breaks the build, and reads as "the flake
+is gone". Provenance, not identity.
+
 ```json
 {
   "schema": "flakesmith/v1",
@@ -698,6 +706,7 @@ two trees a capsule belongs to.
     "polluters": [{"package": "example.com/svc/internal/checkout", "name": "TestSeedDB"}],
     "steps": [{"label": "polluter/TestSeedDB"},
               {"label": "victim/TestCheckout"}],
+    "func": "TestFlakeWitness",
     "flags": {"parallel": 1},
     "seed": 1788950163029644000,
     "runs": 3
@@ -719,6 +728,9 @@ two trees a capsule belongs to.
 The `steps[].test` field is **not written** to JSON (`json:"-"`): the name is already
 inside `label`, and keeping it in two places would bloat the capsule. In a step read
 back from a capsule, `Test` stays empty — code generation must use `Step.Func()`, not `Test.Name`.
+`witness.func` is the name the hunt actually installed, and the only name `replay` and
+`repro.command` are allowed to print (see §9.1); capsules written before it existed fall
+back to `TestFlakeWitness`.
 `evidence` drops empty fields with `omitempty`; `race` is only filled in a `--race`
 verification. `note` (if present) carries the one-sentence warning that `status`
 does not say: "budget exceeded: 1/1 runs", "not reproduced under a race run".
@@ -833,7 +845,7 @@ No panic when the budget is exceeded: a `status: partial` capsule is written and
 | `ErrNotReproduced` | `3` | `repro`: requested test could not be reproduced within the budget; `replay`: witness did not fail N/N; `compile --verify`: generated test stayed green |
 | `ErrBudgetExceeded` | `4` | "budget exceeded" + note: "raise the budget: --budget N --timeout 10m" (partial capsule written) |
 | `ErrUnsupportedTest` | `5` | "unsupported test form: <reason>" (TestMain/subtest/different test package) |
-| `ErrBuildFailed` | `6` | "package failed to build: <reason>" |
+| `ErrBuildFailed` | `6` | "package failed to build: <reason>" — also `replay` when the package does not compile (a build error is never reported as "the flake is fixed") |
 | internal error | `10` | "internal error: <id> (use --debug for detail)" |
 | `context.Canceled` / SIGINT | `130` | "cancelled (SIGINT); unfinished witness files deleted" (128+SIGINT) |
 
@@ -849,6 +861,11 @@ not turn `hunt` red; only **new** flakes produce 1 with `--fail-on-flake`.
 ```
 
 On a clean run: `"flakes": []` — not empty output, but the sentence "scanned and clean".
+
+The single-document rule covers the **partial** path too, in every machine format: a
+budget-capped `--format sarif`, and the `--sarif FILE` side file, both carry the partial
+capsule (a partial result is a finding). The human summary goes to stderr there, so the
+artifact on stdout stays parseable — one run, one document, whichever consumer reads it.
 
 Without `--debug`, no stack trace is shown. A raw panic never leaks to the user (K5).
 

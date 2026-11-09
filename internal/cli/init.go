@@ -36,10 +36,11 @@ jobs:
   hunt:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+          cache: false
 
       # Note: soft mode on first adoption so CI is not broken. For a gate,
       # add --fail-on-flake and delete continue-on-error.
@@ -56,7 +57,7 @@ jobs:
 
       - name: store capsules
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: flakesmith-capsules
           path: "**/.flakesmith/*.json"

@@ -232,3 +232,85 @@ func TestReproFromJSONEdgeCases(t *testing.T) {
 		t.Errorf("the unresolvable package must be named: %q", errOut)
 	}
 }
+
+// A package that already defines TestFlakeWitness forces the hunt to pick the
+// NEXT free name. Replay must install that same name: recomputing from a
+// constant collides with the user's test, the package stops compiling, and the
+// run reads as "0/2 reproduced — the flake may already be fixed". That is the
+// worst answer this command can give, because the user then deletes the capsule.
+func TestReplayUsesTheWitnessNameFromTheCapsule(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test")
+	}
+	dir := clitest.FixtureDir(t, "order-basic")
+	user := filepath.Join(dir, "collision_test.go")
+	if err := os.WriteFile(user, []byte(`package orderbasic
+
+import "testing"
+
+// The user's own test, named exactly what the witness would like to be.
+func TestFlakeWitness(t *testing.T) {}
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	store := filepath.Join(t.TempDir(), "c")
+	if code, _, errOut := clitest.Run("hunt", dir, "-capsule-dir", store, "--format", "json"); code != domain.ExitOK {
+		t.Fatalf("hunt code=%d %s", code, errOut)
+	}
+	ids, err := capsule.NewStore(store).List()
+	if err != nil || len(ids) == 0 {
+		t.Fatalf("no capsule: %v", err)
+	}
+	want := domain.WitnessFuncName + "_2"
+	c, err := capsule.NewStore(store).Read(ids[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Witness.Func != want {
+		t.Errorf("capsule witness func = %q, want %q", c.Witness.Func, want)
+	}
+	if !strings.Contains(c.Repro.Command, "'^"+want+"$'") {
+		t.Errorf("reproduce command must name the colliding-free witness: %s", c.Repro.Command)
+	}
+
+	code, out, errOut := clitest.Run("replay", "-capsule-dir", store, "-n", "2")
+	if code != domain.ExitOK {
+		t.Fatalf("replay code=%d (want a deterministic replay)\n%s\n%s", code, out, errOut)
+	}
+	if !strings.Contains(out, "2/2 reproduced") {
+		t.Errorf("replay must reproduce under the capsule's own witness name:\n%s", out)
+	}
+}
+
+// An uncompilable package is exit 6, not "the flake is gone" (exit 3).
+// replay used to ignore BuildFailed: the missing witness made every test absent
+// from the JSON stream, which reads as StatusSkip, which reads as "not failed".
+func TestReplayReportsBuildFailureAsSix(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test")
+	}
+	dir := clitest.FixtureDir(t, "order-basic")
+	store := filepath.Join(t.TempDir(), "c")
+	if code, _, errOut := clitest.Run("hunt", dir, "-capsule-dir", store, "--format", "json"); code != domain.ExitOK {
+		t.Fatalf("hunt code=%d %s", code, errOut)
+	}
+
+	if err := os.WriteFile(filepath.Join(dir, "broken.go"), []byte(`package orderbasic
+
+func broken() { undefined() }
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	code, out, errOut := clitest.Run("replay", "-capsule-dir", store, "-n", "1")
+	if code != domain.ExitBuildFailed {
+		t.Fatalf("code = %d, want %d\nstdout:\n%s\nstderr:\n%s", code, domain.ExitBuildFailed, out, errOut)
+	}
+	if strings.Contains(out, "stale capsule") {
+		t.Errorf("a build error must not be reported as a fixed flake:\n%s", out)
+	}
+	if !strings.Contains(out, "does not build") {
+		t.Errorf("the report should name the real reason:\n%s", out)
+	}
+}

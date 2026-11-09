@@ -18,8 +18,14 @@ type PkgFacts struct {
 	ImportPath string
 
 	// Clause maps a test function name to its file's package clause
-	// ("flakedemo" or "flakedemo_test"). Two different clauses mean two
-	// different test binaries: a harness cannot call across them.
+	// ("flakedemo" or "flakedemo_test").
+	//
+	// The two clauses are ONE test binary (cmd/go: the `_test`-suffixed
+	// package is compiled separately and LINKED INTO the main test binary), so
+	// in-memory state does cross between them. What a clause boundary does
+	// block is the witness form: a generated file lives in one clause and
+	// cannot call a test function of the other, so a witness spanning them must
+	// be expressed as a single `-run` invocation instead of a t.Run chain.
 	Clause map[string]string
 
 	// TestPos is the declaration site of every test function the scan saw.
