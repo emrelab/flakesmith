@@ -115,7 +115,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          # --repo is not decoration: this job checks out nothing, and gh
+          # resolves the repository from a git working tree otherwise
+          # ("failed to run git: fatal: not a git repository" — v0.2.0).
           gh release create "$GITHUB_REF_NAME" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
             --verify-tag \
             --generate-notes \
             --title "flakesmith $GITHUB_REF_NAME"

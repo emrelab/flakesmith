@@ -60,6 +60,11 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   and the nightly `-count=10` sweep on all three OSes still covers it.
 
 ### Fixed
+- `release.yml`'s publish job ran `gh release create` with no checkout, so gh
+  could not resolve the repository ("failed to run git: fatal: not a git
+  repository") and the first v0.2.0 tag push died at the last step with all
+  five platform builds green. The command now passes `--repo
+  "$GITHUB_REPOSITORY"` explicitly — the job has no working tree by design.
 - The README's GitHub Actions snippet pinned `emrelab/flakesmith@v0.2.0`, a tag
   that was never cut (`git tag` has only `v0.1.0`, `gh release list` is empty),
   so a copy-pasted workflow could not resolve the action. The example now pins
