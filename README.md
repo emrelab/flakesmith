@@ -35,7 +35,8 @@ stdlib only.
 
 Prebuilt static binaries ship with every [release](https://github.com/emrelab/flakesmith/releases):
 linux and darwin (amd64/arm64), windows (amd64), each published with a
-`SHA256SUMS` file. From source stays the default: `go install
+`SHA256SUMS` file. No release has been cut yet, so `go install` is the path that
+works today: `go install
 github.com/emrelab/flakesmith/cmd/flakesmith@latest` — and it is also the
 fallback the GitHub Action uses when no prebuilt binary fits its ref.
 
@@ -196,7 +197,7 @@ class, it names the class it cannot see.
 ## GitHub Actions
 
 ```yaml
-- uses: emrelab/flakesmith@v0.2.0
+- uses: emrelab/flakesmith@main   # pin a v* release tag once one is published
   with:
     paths: ./...
     format: markdown
@@ -213,8 +214,11 @@ when you want the same shape on both.
 
 The action prefers the prebuilt binary of its own tag (verified against
 `SHA256SUMS`) and falls back to building its own source from
-`GITHUB_ACTION_PATH`: `@v0.2.0` says which version is running, with no waiting
-on the proxy for a tag. Go 1.24+ is required (`actions/setup-go` is on you).
+`GITHUB_ACTION_PATH`: pinning a release tag is what says which version is
+running, with no waiting on the proxy. No `v*` release has been cut yet — the
+only tag is `v0.1.0`, which predates `release.yml` — so the example above pins
+`main`, the one ref that is both current and real. Go 1.24+ is required
+(`actions/setup-go` is on you).
 
 Turn an already-red `go test` log into a PR comment — `repro --from-json` shrinks
 the log's own failures to a witness, no re-scan: [`docs/CI-REPRO.md`](docs/CI-REPRO.md).

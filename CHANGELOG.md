@@ -60,6 +60,13 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   and the nightly `-count=10` sweep on all three OSes still covers it.
 
 ### Fixed
+- The README's GitHub Actions snippet pinned `emrelab/flakesmith@v0.2.0`, a tag
+  that was never cut (`git tag` has only `v0.1.0`, `gh release list` is empty),
+  so a copy-pasted workflow could not resolve the action. The example now pins
+  `main` — the one ref that is both current and real — with a note to pin a `v*`
+  release tag once one is published; `docs/ARCHITECTURE.md`'s status line and the
+  install paragraph claimed the same nonexistent release and now say what is
+  true. Issue #18.
 - `docs/ARCHITECTURE.md` §14 no longer bans "cross-package order" outright: the
   `--polluter-pkg` two-stage engine ships, so the fence now excludes what is
   actually out of reach — in-memory state across two `go test` processes — and
