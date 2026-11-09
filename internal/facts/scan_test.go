@@ -135,6 +135,37 @@ func TestScanDetectsSubtests(t *testing.T) {
 	}
 }
 
+// A synctest bubble makes its test's clock virtual, so a flagged test whose
+// verdict still varies is a real code bug — the fact must name exactly the
+// bubble users and no one else (issue #22).
+func TestScanDetectsSynctestBubbles(t *testing.T) {
+	f := scan(t, "synctest-bubble")
+	if f.TestSynctest["TestVirtualHour"] != true {
+		t.Error("TestVirtualHour opens a bubble via synctest.Test; must be flagged")
+	}
+	if f.TestSynctest["TestBubbleWait"] != true {
+		t.Error("TestBubbleWait calls synctest.Wait; must be flagged")
+	}
+	if f.TestSynctest["TestPlain"] {
+		t.Error("TestPlain has no bubble; it must not inherit the package flag")
+	}
+	// The preview spellings must keep matching after the Go 1.26 rename.
+	for _, spelling := range []string{"synctest.Run(body)", "synctest.Omega(body)", "synctest.Go(body)"} {
+		src := "package p\n\nimport \"testing\"\n\nfunc TestOld(t *testing.T) {\n	" + spelling + "\n}\n"
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, "old_test.go"), []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		pf, err := facts.Scan(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !pf.TestSynctest["TestOld"] {
+			t.Errorf("%s: preview spelling must be flagged", spelling)
+		}
+	}
+}
+
 func TestScanImportPath(t *testing.T) {
 	// Every fixture is its own module: the import path should be "fixture/<name>".
 	f := scan(t, "order-basic")

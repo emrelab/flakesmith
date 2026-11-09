@@ -7,6 +7,13 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- `PkgFacts.TestSynctest` (issue #22): the facts scan now names tests that use
+  the `testing/synctest` bubble API (`Test`/`Run`/`Omega`/`Wait`/`Go`, all
+  spellings across the previews and the Go 1.26 graduation). A bubble's clock
+  is virtual, so a flagged test whose verdict still varies is a real code bug —
+  the "time/network/DB dependent" excuse cannot cover it. Naming only: the tool
+  never synthesizes bubbles around someone else's test. Fixture:
+  `synctest-bubble` (needs Go ≥ 1.26).
 - `scripts/auto/land.sh`: the independent verdict for a direct push. Waits for
   the check runs on a `main` commit, calls green only when every run concluded
   `SUCCESS`/`NEUTRAL`, and on red reverts, pushes the revert and exits 1. Exit 2

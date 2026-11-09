@@ -895,6 +895,7 @@ Example fake universe: `TestVictim` fails only when `RunRegex` covers all tests 
 | `file-leak` | polluter writing to a fixed path instead of `t.TempDir()` | `KindOrder` + `FilesTouched` |
 | `repeat-accumulate` | global counter, fails on round 2 | `KindRepeat` |
 | `clause-mismatch` | mixed `package foo` + `package foo_test` | `ErrUnsupportedTest` |
+| `synctest-bubble` | `testing/synctest` bubble (needs Go ≥ 1.26) | facts only: `TestSynctest` names the bubble tests, none flaky |
 
 ### 11.3. Golden files
 
@@ -953,6 +954,11 @@ The Red Team analysis (K1) makes this the MVP's survival condition:
 - ❌ **LLM / automatic fix** — none. It shows evidence; it does not patch code.
 - ❌ **Go toolchain patch / runtime fork / WASM** — none (ReplayGo's territory).
 - ❌ **DB/HTTP replay** — none. External dependency → `probabilistic` label.
+  One exception in *naming* only: a `testing/synctest` bubble has a virtual
+  clock, so it does not belong to this excuse class — the facts layer flags
+  its users (`PkgFacts.TestSynctest`) and a flagged test whose verdict still
+  varies is a real code bug. flakesmith never wraps someone else's test in a
+  bubble: that would fabricate determinism.
 - ❌ **Subtest (`t.Run` inner) support** — outside the MVP; explicitly refused with `ErrUnsupportedTest`.
 - ❌ **Cross-package order *within one process*** — none. `--polluter-pkg` runs two `go test`
   processes in a chosen sequence and merges the verdicts, so only state that survives the

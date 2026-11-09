@@ -73,6 +73,18 @@ type PkgFacts struct {
 	// concurrency flake, so the parallel probe can answer "not this class"
 	// without spending a single build.
 	TestParallel map[string]bool
+	// TestSynctest reports testing/synctest usage per test function: a call to
+	// synctest.Test (Go 1.26) / synctest.Run / synctest.Omega / synctest.Wait /
+	// synctest.Go anywhere in its body (bubbles opened by a called helper are
+	// invisible — static scope, same as FileCalls).
+	//
+	// The point is naming, not fixing: a test inside a bubble has a virtual
+	// clock, so its verdict is deterministic BY CONSTRUCTION. A test flagged
+	// here whose verdict still varies is a real code bug, not a loaded machine —
+	// it must not be excused as "time/network/DB dependent", the one class the
+	// tool cannot reproduce. flakesmith never synthesizes bubbles around
+	// someone else's test: that would fabricate determinism.
+	TestSynctest map[string]bool
 
 	// Files lists the parsed _test.go files, sorted.
 	Files []string

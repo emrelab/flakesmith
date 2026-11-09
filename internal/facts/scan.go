@@ -43,6 +43,7 @@ func Scan(dir string) (PkgFacts, error) {
 		FileCalls:      map[string][]string{},
 		TestSubtests:   map[string]bool{},
 		TestParallel:   map[string]bool{},
+		TestSynctest:   map[string]bool{},
 	}
 
 	fset := token.NewFileSet()
@@ -120,6 +121,9 @@ func Scan(dir string) (PkgFacts, error) {
 			}
 			if u.parallel {
 				f.TestParallel[name] = true
+			}
+			if u.synctest {
+				f.TestSynctest[name] = true
 			}
 		}
 	}
@@ -273,6 +277,7 @@ type funcUsage struct {
 	fsCalls  []string
 	subtest  bool
 	parallel bool
+	synctest bool
 }
 
 // analyseFunc walks one function body and classifies its effects.
@@ -312,6 +317,9 @@ func analyseFunc(fn *ast.FuncDecl, globals map[string]bool) funcUsage {
 			}
 			if isTParallel(x) {
 				u.parallel = true
+			}
+			if isSynctestCall(x) {
+				u.synctest = true
 			}
 		case *ast.Ident:
 			if globals[x.Name] {
@@ -456,6 +464,31 @@ func isTParallel(call *ast.CallExpr) bool {
 	}
 	recv, ok := sel.X.(*ast.Ident)
 	return ok && (recv.Name == "t" || recv.Name == "b" || recv.Name == "tb")
+}
+
+// isSynctestCall matches the testing/synctest bubble API across its whole
+// lineage: synctest.Run (1.24/1.25 preview and the golang.org/x/sync/synctest
+// preview, same selector name), synctest.Omega (the 1.24 stdlib preview
+// spelling), synctest.Test (graduated spelling, Go 1.26), plus Wait and Go.
+// The match is identifier-name only, no import resolution — same contract as
+// filesystemCall: we read syntax and never run the type checker.
+//
+// Go is included though it opens no bubble itself: every legal synctest.Go
+// sits inside a bubble body, so it names the same test.
+func isSynctestCall(call *ast.CallExpr) bool {
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok {
+		return false
+	}
+	pkg, ok := sel.X.(*ast.Ident)
+	if !ok || pkg.Name != "synctest" {
+		return false
+	}
+	switch sel.Sel.Name {
+	case "Run", "Test", "Wait", "Go", "Omega":
+		return true
+	}
+	return false
 }
 
 func dedupeSort(in []string) []string {

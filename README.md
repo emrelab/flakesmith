@@ -189,7 +189,7 @@ CI scripts bind to these; no path fails silently with 0.
 | subtests (`t.Run` tree) | ✅ | the parent test is called; verdicts fold onto subtests |
 | `TestMain` | ✅ | the witness is installed in the same package, `TestMain` runs too |
 | pollution across two test packages | ⚠️ `--polluter-pkg` | only state that **survives the process boundary** (files, ports): hunt names the two-stage command `go test <polluter> && go test <victim>`, `replay` runs both stages. In-memory globals cannot cross two binaries — no witness is claimed. `compile` refuses these honestly (exit 5) and prints the runnable command |
-| time/network/DB dependent | ❌ | outside environment control |
+| time/network/DB dependent | ❌ | outside environment control — with one naming exception: a `testing/synctest` bubble has a **virtual clock**, the scan names its users, and a flagged test whose verdict still varies is a real code bug, not environment |
 
 Every boundary is **honest**: instead of saying "no flake" in an out-of-scope
 class, it names the class it cannot see.
