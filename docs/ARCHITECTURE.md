@@ -131,7 +131,8 @@ flakesmith/
 │   │   ├── env-dependent/          os.Getenv
 │   │   ├── file-leak/              temp file
 │   │   ├── repeat-accumulate/      state accumulated across -count
-│   │   └── clause-mismatch/        package foo vs foo_test
+│   │   ├── clause-mismatch/        package foo vs foo_test
+│   │   └── parallel-clause/        t.Parallel across foo / foo_test
 │   └── golden/                     expected generated test files
 └── .github/workflows/ci.yml        linux+macos, -race, fixtures
 ```
@@ -896,6 +897,9 @@ Example fake universe: `TestVictim` fails only when `RunRegex` covers all tests 
 | `repeat-accumulate` | global counter, fails on round 2 | `KindRepeat` |
 | `clause-mismatch` | mixed `package foo` + `package foo_test` | `ErrUnsupportedTest` |
 | `synctest-bubble` | `testing/synctest` bubble (needs Go ≥ 1.26) | facts only: `TestSynctest` names the bubble tests, none flaky |
+
+| `parallel-clause` | `t.Parallel()` with the polluter in the other clause | `ErrUnsupportedTest` |
+
 
 ### 11.3. Golden files
 

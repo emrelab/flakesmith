@@ -67,6 +67,22 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   and the nightly `-count=10` sweep on all three OSes still covers it.
 
 ### Fixed
+
+- The parallel probe collected sibling candidates by name only and never
+  filtered them by package clause: a package with tests in both `foo` and
+  `foo_test` handed a cross-clause name to the witness template, the generated
+  file failed to compile, and the probe died with
+  `domain.ErrInternal: witness did not compile` — which `ddmin` propagated out
+  of the whole hunt. Candidates are now split with the same `splitByClause` the
+  order probe uses; the witness is built from the victim's clause only, and a
+  cross-clause polluter is reported as `ErrUnsupportedTest` naming both tests and
+  both packages. `crossClauseError` takes the witness kind, so the message says
+  *parallel* when the parallel probe is the one refusing. New fixture
+  `parallel-clause` (`t.Parallel()` with the polluter in the other clause) plus
+  three probe-level tests: cross-clause-only, same-clause-does-not-explain, and
+  same-clause-covers (the last one guards against over-refusing). The comment
+  that claimed the other clause was "a separate process" is corrected: two
+  clauses of one directory link into one test binary. Issue #13.
 - `release.yml`'s publish job ran `gh release create` with no checkout, so gh
   could not resolve the repository ("failed to run git: fatal: not a git
   repository") and the first v0.2.0 tag push died at the last step with all
@@ -79,6 +95,7 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   release tag once one is published; `docs/ARCHITECTURE.md`'s status line and the
   install paragraph claimed the same nonexistent release and now say what is
   true. Issue #18.
+
 - `docs/ARCHITECTURE.md` §14 no longer bans "cross-package order" outright: the
   `--polluter-pkg` two-stage engine ships, so the fence now excludes what is
   actually out of reach — in-memory state across two `go test` processes — and

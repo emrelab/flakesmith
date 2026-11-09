@@ -146,14 +146,13 @@ func (p Order) minimize(ctx context.Context, tgt Target, r gotest.Runner, order 
 		return nil, ErrNotReproduced
 	}
 
-	// A witness can only call tests that live in the victim's own test binary.
-	// `pkg` and `pkg_test` are compiled into two separate binaries that `go
-	// test .` runs back to back, so a sibling from the other clause cannot be
-	// invoked — and, because the second binary starts after the first exits,
-	// the only way it can still pollute the victim is through state outside
-	// the process (files, env, ports). That class is real, but our witness
-	// format cannot express it, so it must be reported, never silently
-	// dropped into "no flake".
+	// A witness can only call tests that live in the victim's own package
+	// clause. `pkg` and `pkg_test` are two visibility boundaries inside ONE
+	// test binary, so their tests do run in the same process — but the witness
+	// file is generated into one clause and calls functions by name, and a test
+	// function of the other clause is not addressable from there
+	// ("undefined: TestOther"). We cannot express such a polluter, so it must
+	// be reported, never silently dropped into "no flake".
 	same, cross := splitByClause(candidates, tgt.Facts.Clause, tgt.Test.Name)
 
 	clause, fn, err := p.witnessShape(tgt)
@@ -162,7 +161,7 @@ func (p Order) minimize(ctx context.Context, tgt Target, r gotest.Runner, order 
 	}
 
 	if len(same) == 0 && len(cross) > 0 {
-		return nil, crossClauseError(tgt, cross)
+		return nil, crossClauseError(tgt, cross, "order witness")
 	}
 
 	pred := p.predicate(tgt, r, clause, fn)
@@ -172,7 +171,7 @@ func (p Order) minimize(ctx context.Context, tgt Target, r gotest.Runner, order 
 		// package as a whole did fail: the missing ingredient is on the other
 		// side of the binary boundary.
 		if errors.Is(err, domain.ErrNotReproducible) && len(cross) > 0 {
-			return nil, crossClauseError(tgt, cross)
+			return nil, crossClauseError(tgt, cross, "order witness")
 		}
 		return nil, err
 	}
@@ -294,15 +293,19 @@ func splitByClause(cands []domain.TestID, clauseOf map[string]string, victim str
 
 // crossClauseError names the conflict. A bare "unsupported" would leave the
 // user guessing which tests, in which packages, defeated the tool.
-func crossClauseError(tgt Target, cross []domain.TestID) error {
+//
+// The witness kind is a parameter because the same finding defeats two different
+// shapes: an order chain and a parallel overlap. Naming the wrong one would send
+// the reader looking in the wrong place.
+func crossClauseError(tgt Target, cross []domain.TestID, kind string) error {
 	victimClause := tgt.Facts.Clause[tgt.Test.Name]
 	parts := make([]string, 0, len(cross))
 	for _, c := range cross {
 		parts = append(parts, fmt.Sprintf("%s (package %s)", c.Name, tgt.Facts.Clause[c.Name]))
 	}
 	return domain.Wrap(domain.ErrUnsupportedTest,
-		"%s (package %s) and %s are not in the same test binary; no order witness can be built",
-		tgt.Test.Name, victimClause, strings.Join(parts, ", "))
+		"%s (package %s) and %s are not in the same test package clause; no %s can be built",
+		tgt.Test.Name, victimClause, strings.Join(parts, ", "), kind)
 }
 
 // before returns the tests that ran before victim, in the observed order.
