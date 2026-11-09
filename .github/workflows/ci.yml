@@ -26,14 +26,17 @@ jobs:
       # write CRLF working trees and gofmt would flag every file. Env-level git
       # config (GIT_CONFIG_COUNT, git >= 2.31) outranks the image's system
       # gitconfig for the checkout process, so files materialize with LF.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         env:
           GIT_CONFIG_COUNT: '1'
           GIT_CONFIG_KEY_0: core.autocrlf
           GIT_CONFIG_VALUE_0: 'false'
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: '1.26'
+          # Zero dependencies, so there is no module cache worth restoring —
+          # and v7's default cache looks for go.sum, which this module has not.
+          cache: false
 
       - name: gofmt
         run: |
@@ -86,10 +89,11 @@ jobs:
   oldest:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version: '1.24'
+          cache: false
       - name: vet
         run: go vet ./...
       - name: build
@@ -104,10 +108,13 @@ jobs:
   self-hunt:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version: '1.26'
+          # Zero dependencies, so there is no module cache worth restoring —
+          # and v7's default cache looks for go.sum, which this module has not.
+          cache: false
       - name: build
         run: make build
       - name: hunt our own packages
@@ -132,7 +139,7 @@ jobs:
           exit "$rc"
       - name: save capsules
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: self-hunt-capsules
           path: "**/.flakesmith/*.json"

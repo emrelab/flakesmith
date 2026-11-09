@@ -241,3 +241,57 @@ func TestHuntJSONIsOneDocument(t *testing.T) {
 		t.Errorf("flakes must not be empty: %s", out)
 	}
 }
+
+// --format sarif promises ONE parseable document, and a partial capsule is a
+// finding too. The partial path used to print the human summary to stdout and
+// only then the SARIF body, so a budget-capped CI run produced a file whose
+// first byte was "n", not "{": code scanning rejected the whole upload.
+func TestHuntSARIFPartialIsOneDocument(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test")
+	}
+	dir := clitest.FixtureDir(t, "order-basic")
+	code, out, _ := clitest.Run("hunt", dir, "--format", "sarif",
+		"-capsule-dir", filepath.Join(t.TempDir(), "c"), "--budget", "1")
+	if code != domain.ExitBudget {
+		t.Fatalf("code = %d, want %d (budget)", code, domain.ExitBudget)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal([]byte(out), &doc); err != nil {
+		t.Fatalf("partial SARIF is not JSON: %v\n%s", err, out)
+	}
+	if doc["version"] != "2.1.0" {
+		t.Errorf("not a SARIF document: %v", doc["version"])
+	}
+}
+
+// The --sarif side file is written from the same collection as --format json;
+// a partial capsule must land in it instead of vanishing, or the two machine
+// outputs describe different runs.
+func TestHuntSARIFSideFileCarriesThePartialCapsule(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test")
+	}
+	dir := clitest.FixtureDir(t, "order-basic")
+	side := filepath.Join(t.TempDir(), "flakesmith.sarif")
+	code, _, errOut := clitest.Run("hunt", dir, "--sarif", side,
+		"-capsule-dir", filepath.Join(t.TempDir(), "c"), "--budget", "1")
+	if code != domain.ExitBudget {
+		t.Fatalf("code = %d, want %d (%s)", code, domain.ExitBudget, errOut)
+	}
+	data, err := os.ReadFile(side)
+	if err != nil {
+		t.Fatalf("side file missing: %v", err)
+	}
+	var doc struct {
+		Runs []struct {
+			Results []any `json:"results"`
+		} `json:"runs"`
+	}
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("side SARIF is not JSON: %v", err)
+	}
+	if len(doc.Runs) != 1 || len(doc.Runs[0].Results) != 1 {
+		t.Errorf("expected the partial capsule as one result, got %+v", doc.Runs)
+	}
+}

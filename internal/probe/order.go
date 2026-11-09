@@ -192,6 +192,10 @@ func (p Order) minimize(ctx context.Context, tgt Target, r gotest.Runner, order 
 		Steps:     steps,
 		Flags:     domain.Flags{Parallel: 1},
 		Runs:      verify,
+		// The exact name the predicate installed. Replay re-creates the same
+		// file; recomputing it later (from a package that has since gained a
+		// TestFlakeWitness) would collide and read as "flake fixed".
+		Func: fn,
 	}, nil
 }
 

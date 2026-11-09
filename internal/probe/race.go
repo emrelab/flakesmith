@@ -55,7 +55,13 @@ func confirmChain(ctx context.Context, tgt Target, w *domain.Witness, r gotest.R
 	if err != nil {
 		return false, "", err
 	}
-	fn := harness.FuncName(tgt.Facts.Clause)
+	// The probe already picked a collision-free name and the predicate proved
+	// the witness under it; reuse it. Recomputing risks a different name when
+	// ConfirmRace runs on a capsule found by an older build (Func empty).
+	fn := w.Func
+	if fn == "" {
+		fn = harness.FuncName(tgt.Facts.Clause)
+	}
 
 	ctx, unlock, lerr := policy.Locked(ctx, tgt.Dir)
 	if lerr != nil {

@@ -7,6 +7,12 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- `witness.func` on the capsule: the name the hunt actually installed the witness
+  under (`TestFlakeWitness`, or `TestFlakeWitness_2` when the package already
+  defines the first). `replay` and the printed reproduce command now read it
+  instead of hardcoding the constant. Capsules without the field keep working
+  (they fall back to the fixed name). Not part of the capsule id — it is
+  provenance, not identity (ARCHITECTURE §9.1).
 - `PkgFacts.TestSynctest` (issue #22): the facts scan now names tests that use
   the `testing/synctest` bubble API (`Test`/`Run`/`Omega`/`Wait`/`Go`, all
   spellings across the previews and the Go 1.26 graduation). A bubble's clock
@@ -67,7 +73,6 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   and the nightly `-count=10` sweep on all three OSes still covers it.
 
 ### Fixed
-
 - The parallel probe collected sibling candidates by name only and never
   filtered them by package clause: a package with tests in both `foo` and
   `foo_test` handed a cross-clause name to the witness template, the generated
@@ -83,6 +88,41 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   same-clause-covers (the last one guards against over-refusing). The comment
   that claimed the other clause was "a separate process" is corrected: two
   clauses of one directory link into one test binary. Issue #13.
+
+- `replay` reported an uncompilable package as "never reproduced — the flake may
+  already be fixed (stale capsule)" and exited 3. `RunResult.BuildFailed` was
+  never consulted, so a missing witness made every test absent from the JSON
+  stream, which reads as `StatusSkip`, which reads as "not failed". A build error
+  is now exit 6 with "package does not build — the witness could not be run", and
+  the verdict switch is skipped entirely when a round ended in an error.
+- `replay` and the printed `reproduce` command hardcoded `TestFlakeWitness`. In a
+  package that defines that name itself (`TestFlakeWitness redeclared`) the hunt
+  correctly picked `TestFlakeWitness_2` for its predicate, but replay installed
+  the colliding file anyway: build failure, `0/N reproduced`, "the flake may
+  already be fixed", exit 3 — a real flake reported as fixed. The name now
+  travels in the capsule (`witness.func`) and is used by `replay`, the printed
+  `reproduce` command and `ConfirmRace`. `compile`'s generated test keeps its own
+  `TestFlakeRegression_*` name, where no such collision exists.
+- `hunt --format sarif` wrote an unparseable document when the budget ran out:
+  the partial path printed the human summary to stdout and only then the SARIF
+  body, so the file started with prose. The partial capsule is now collected for
+  `sarif` exactly as for `json`, and the human summary goes to stderr.
+- `--sarif FILE` (side file, any `--format`) dropped partial capsules: the file
+  said `results: []` while `--format json` reported the same capsule. Same fix as
+  above — one collection path for every machine-readable surface.
+- `capsule.Store.Read` accepted any `kind` string and let the failure surface
+  three layers down as "internal error: unknown flake class". It now validates
+  the class and returns a usage error naming the bad value; partial capsules stay
+  exempt (they carry no class by construction).
+- Capsule provenance asked git four times per capsule (`rev-parse` and `status`,
+  twice: once on the witness path and again inside `baseCapsule`). One memoized
+  read per package now, with a 10s deadline — a wedged git can no longer hang a
+  hunt at the point where the capsule is written.
+- `domain.Witness.Cleaners` was a schema field nothing ever wrote or read; removed.
+- `facts.PkgFacts.Clause`'s doc comment claimed two clauses are two test binaries.
+  They are one binary (cmd/go links the `_test` package into the main test
+  binary); what the clause boundary blocks is the witness *form*, not the
+  pollution — the same correction the parallel probe's refusal message got in #13.
 - `release.yml`'s publish job ran `gh release create` with no checkout, so gh
   could not resolve the repository ("failed to run git: fatal: not a git
   repository") and the first v0.2.0 tag push died at the last step with all

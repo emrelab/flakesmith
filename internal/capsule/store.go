@@ -77,6 +77,18 @@ func (s Store) Read(id string) (domain.Capsule, error) {
 	if c.Schema != domain.SchemaVersion {
 		return c, fmt.Errorf("capsule schema version not supported: %s (expected %s)", c.Schema, domain.SchemaVersion)
 	}
+	// The class decides which regression body compiles and which report
+	// sentence is true. A hand-edited or truncated file must be refused here,
+	// as a usage error the user can act on — not as an "internal error: unknown
+	// flake class" three layers down in the generator.
+	if !c.Kind.Valid() {
+		if c.Status == domain.StatusPartial {
+			// Partial capsules predate the kind field being meaningful; they
+			// are reported, never compiled.
+			return c, nil
+		}
+		return c, fmt.Errorf("%w: capsule %s has unknown flake class %q", domain.ErrUsage, id, c.Kind)
+	}
 	return c, nil
 }
 

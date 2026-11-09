@@ -73,18 +73,39 @@ type Witness struct {
 	Kind      Kind     `json:"kind"`
 	Victim    TestID   `json:"victim"`
 	Polluters []TestID `json:"polluters,omitempty"`
-	Cleaners  []TestID `json:"cleaners,omitempty"`
 	Steps     []Step   `json:"steps"`
 	Flags     Flags    `json:"flags"`
 	Seed      int64    `json:"seed,omitempty"`    // -shuffle seed for KindOrder
 	EnvDiff   []string `json:"envDiff,omitempty"` // key names only
 	Runs      int      `json:"runs"`              // verified over how many runs
+	// Func is the generated witness function name this witness was proven with
+	// ("TestFlakeWitness", or "TestFlakeWitness_2" when the package already
+	// defines TestFlakeWitness).
+	//
+	// It is provenance, not identity: `harness.FuncName` derives it from the
+	// package's own test names, so it changes when a user adds a test, not when
+	// the bug changes. It is therefore NOT part of capsule.ID — but it MUST be
+	// carried, because replay and the printed reproduce command reinstall the
+	// witness file: guessing the name collides with the user's test, the
+	// package stops compiling, and the run reads as "the flake is gone".
+	Func string `json:"func,omitempty"`
 	// CrossBinary marks an order witness whose polluter runs in a SEPARATE
 	// `go test` process (#6): the pollution it proves survives the process
 	// boundary — files, ports, cwd — never in-memory globals. A witness file
 	// cannot express it, so compile refuses these capsules; replay and the
 	// capsule command run the two stages in sequence.
 	CrossBinary bool `json:"crossBinary,omitempty"`
+}
+
+// FuncName is the witness function to install for this witness.
+//
+// Capsules written before Func existed fall back to the fixed name — the best
+// answer available, and the one replay used to hardcode.
+func (w *Witness) FuncName() string {
+	if w == nil || w.Func == "" {
+		return WitnessFuncName
+	}
+	return w.Func
 }
 
 // Minimal reports whether this is a verified minimal witness (at least one polluter and at least 2 runs).

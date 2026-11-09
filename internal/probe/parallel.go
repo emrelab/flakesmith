@@ -153,6 +153,8 @@ func (p Parallel) Probe(ctx context.Context, tgt Target, r gotest.Runner) (*doma
 		// turning a proof into a false negative.
 		Flags: domain.Flags{Parallel: len(steps)},
 		Runs:  verify,
+		// Same reason as the order probe: replay reinstalls this file by name.
+		Func: fn,
 	}, nil
 }
 

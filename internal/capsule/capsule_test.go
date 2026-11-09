@@ -1,8 +1,10 @@
 package capsule_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -144,5 +146,44 @@ func TestStoreWriteIsAtomic(t *testing.T) {
 		if filepath.Ext(e.Name()) == ".tmp" || len(e.Name()) > 5 && e.Name()[0] == '.' {
 			t.Errorf("temp file left behind: %s", e.Name())
 		}
+	}
+}
+
+// An unknown flake class is a usage error, not an internal one.
+//
+// The class selects the regression body and the report sentence; a hand-edited
+// or truncated capsule used to sail through Read and only explode inside the
+// generator as "internal error: unknown flake class", which tells the user
+// nothing about the file they are holding. Partial capsules are exempt: they
+// carry no class by construction and are never compiled.
+func TestReadRejectsUnknownKind(t *testing.T) {
+	dir := t.TempDir()
+	store := capsule.NewStore(dir)
+	bad := domain.Capsule{
+		Schema: domain.SchemaVersion,
+		ID:     "fs_bad",
+		Kind:   domain.Kind("wobble"),
+		Target: domain.Target{Package: "example.com/m", Victim: "TestX"},
+		Status: domain.StatusConfirmed,
+	}
+	if _, err := store.Write(bad); err != nil {
+		t.Fatal(err)
+	}
+	_, err := store.Read("fs_bad")
+	if !errors.Is(err, domain.ErrUsage) {
+		t.Fatalf("want ErrUsage, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "wobble") {
+		t.Errorf("the message must name the bad class: %v", err)
+	}
+
+	partial := bad
+	partial.ID = "fs_partial"
+	partial.Status = domain.StatusPartial
+	if _, err := store.Write(partial); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Read("fs_partial"); err != nil {
+		t.Errorf("a partial capsule has no class by design: %v", err)
 	}
 }
