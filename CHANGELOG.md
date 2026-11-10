@@ -7,6 +7,17 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- `scripts/docs-drift.sh` and its `docs` CI job: the README is a claim about the
+  binary, so the gate fails when a doc says no release exists, when the Action
+  example pins a branch instead of a real tag, or when the sample `hunt` output
+  drifts from what `testdata/fixtures/order-basic` actually prints (ids, run
+  counts and Wilson bounds normalized). The job checks out with
+  `fetch-depth: 0`, because a shallow clone cannot see the tags it verifies.
+- A GitHub Pages site at https://emrelab.github.io/flakesmith/ built from
+  `docs/` by `.github/workflows/pages.yml` (build on PRs, deploy only from
+  `main`). Docs pages need explicit front matter to be rendered rather than
+  copied, and the fences carrying Go templates or Actions expressions are
+  wrapped in `{% raw %}` — Liquid runs before markdown and would blank them.
 - Two pinned real-world reproductions (#1): gosimple/slug#83 and
   router-for-me/CLIProxyAPI#7356, each verified through replay, RED regression,
   upstream fix and GREEN regression. `scripts/verify-real-world.sh` repeats the
@@ -56,6 +67,12 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   the AST scanner must see through (`x =`, `x.f =`, `x[i] =`, `*p =`, `(x) =`).
 
 ### Changed
+- The README describes the release that exists. It claimed "no release has been
+  cut yet" and "the only tag is `v0.1.0`" for a day after `v0.2.0` shipped with
+  five binaries; the install section now carries the real download and `go
+  install` lines, and the Action example pins `@v0.2.0` instead of the mutable
+  `main`. The stat line no longer calls both real-world cases "fixed": one fix
+  is merged upstream, the other is an open proposal applied locally.
 - `auto:safe` no longer opens a PR: after `verify.sh --tier safe` it pushes
   `auto/issue-N:main` (explicit refspec, never forced) and `land.sh` takes the
   CI verdict, reverting on red. A PR paid for CI before touching `main`; this
