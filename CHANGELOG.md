@@ -7,6 +7,11 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Two pinned real-world reproductions (#1): gosimple/slug#83 and
+  router-for-me/CLIProxyAPI#7356, each verified through replay, RED regression,
+  upstream fix and GREEN regression. `scripts/verify-real-world.sh` repeats the
+  lifecycle; `docs/real-world/` carries the evidence. Two dependency-free
+  reductions keep the isolation patterns in the integration suite.
 - `witness.func` on the capsule: the name the hunt actually installed the witness
   under (`TestFlakeWitness`, or `TestFlakeWitness_2` when the package already
   defines the first). `replay` and the printed reproduce command now read it
@@ -73,6 +78,14 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   and the nightly `-count=10` sweep on all three OSes still covers it.
 
 ### Fixed
+- Baseline matching now uses commit-independent defect fingerprints (baseline
+  schema v2), keeping known flakes known after unrelated commits (#32).
+  Legacy v1 baselines require an explicit full rescan with `--write-baseline`;
+  corrupt files are refused rather than silently replaced. Baseline files are
+  excluded from capsule discovery, so default compile/replay still select evidence.
+- Compiling multiple victims from one source file preserves every regression
+  in separate victim-named files (#33). Existing legacy generated files are
+  reused for their own victim, and repeated compilation remains idempotent.
 - The parallel probe collected sibling candidates by name only and never
   filtered them by package clause: a package with tests in both `foo` and
   `foo_test` handed a cross-clause name to the witness template, the generated

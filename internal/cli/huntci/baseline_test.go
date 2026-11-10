@@ -1,6 +1,8 @@
 package clihuntci
 
 import (
+	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -37,13 +39,22 @@ func TestHuntBaselineGatesOnNewFlakesOnly(t *testing.T) {
 		t.Fatalf("baseline carries %d ids, expected 1: %v", len(b.IDs), b.IDs)
 	}
 
+	// The baseline shares the capsule directory in ordinary use; it must never
+	// become the newest "capsule" selected by compile/replay.
+	if err := capsule.WriteBaseline(filepath.Join(store, capsule.BaselineFileName), b.IDs); err != nil {
+		t.Fatal(err)
+	}
+	if code, _, stderr := clitest.Run("compile", "--capsule-dir", store, "--pkg", dir, "--dry-run"); code != domain.ExitOK {
+		t.Fatalf("baseline masked newest capsule: %d %s", code, stderr)
+	}
+
 	// 1) Known flake: the gate is green, but the flake is still reported.
 	code, stdout, stderr := clitest.Run("hunt", dir, "--capsule-dir", store,
 		"--baseline", path, "--fail-on-flake")
 	if code != domain.ExitOK {
 		t.Fatalf("known flake broke the gate: code = %d (stderr=%s)", code, stderr)
 	}
-	if !strings.Contains(stderr, "known flake: "+b.IDs[0]) {
+	if !strings.Contains(stderr, "known flake: fs_") {
 		t.Errorf("known flake was not reported:\n%s", stderr)
 	}
 	if !strings.Contains(stderr, "baseline: 1 known, 0 new") {
@@ -81,5 +92,65 @@ func TestHuntMissingBaselineIsUsageError(t *testing.T) {
 	}
 	if !strings.Contains(stderr, "baseline not found") {
 		t.Errorf("no explanation: %q", stderr)
+	}
+}
+
+func TestBaselineSurvivesUnrelatedCommit(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test")
+	}
+	dir := clitest.FixtureDir(t, "order-basic")
+	t.Chdir(dir)
+	git := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-c", "user.name=flakesmith", "-c", "user.email=f@example.com", "-c", "core.hooksPath="}, args...)...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	git("init", "-b", "main")
+	git("add", "go.mod", "checkout_test.go")
+	git("commit", "-m", "initial")
+	store := t.TempDir()
+	baseline := filepath.Join(t.TempDir(), "baseline.json")
+	if code, _, stderr := clitest.Run("hunt", ".", "--capsule-dir", store, "--write-baseline", "--baseline", baseline); code != 0 {
+		t.Fatalf("baseline: %d %s", code, stderr)
+	}
+	ids, _ := capsule.NewStore(store).List()
+	if len(ids) != 1 {
+		t.Fatalf("capsules = %v", ids)
+	}
+	before, err := capsule.NewStore(store).Read(ids[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	git("commit", "--allow-empty", "-m", "unrelated change")
+	code, stdout, stderr := clitest.Run("hunt", ".", "--capsule-dir", store, "--baseline", baseline, "--fail-on-flake")
+	if code != 0 || !strings.Contains(stderr, "baseline: 1 known, 0 new") || !strings.Contains(stdout, "TestVictim") {
+		t.Fatalf("known defect after commit: %d\n%s\n%s", code, stdout, stderr)
+	}
+	ids, _ = capsule.NewStore(store).List()
+	if len(ids) != 2 {
+		t.Fatalf("commit-specific evidence lost: %v", ids)
+	}
+	after, err := capsule.NewStore(store).Read(ids[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if before.Repo.Commit == after.Repo.Commit || before.ID == after.ID {
+		t.Fatal("new commit provenance not preserved")
+	}
+	// A second victim must still break the gate.
+	src, err := os.ReadFile("checkout_test.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src = append(src, []byte("\nfunc TestNewVictim(t *testing.T) { TestVictim(t) }\n")...)
+	if err := os.WriteFile("checkout_test.go", src, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, _, stderr = clitest.Run("hunt", ".", "--capsule-dir", store, "--baseline", baseline, "--fail-on-flake")
+	if code != domain.ExitFlakeFound || !strings.Contains(stderr, "baseline: 1 known, 1 new") {
+		t.Fatalf("new defect did not trip gate: %d %s", code, stderr)
 	}
 }

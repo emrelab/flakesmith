@@ -70,3 +70,15 @@ func PartialID(target domain.Target, status domain.CapsuleStatus, reason, module
 	sum := sha256.Sum256([]byte(strings.Join(parts, "\x00")))
 	return "fs_" + hex.EncodeToString(sum[:])[:12]
 }
+
+// Fingerprint identifies a defect across commits. Run parameters, generated
+// names and provenance do not change which victim/polluter relationship is known.
+// Cross-process witnesses remain distinct from same-process witnesses.
+func Fingerprint(w domain.Witness, module string) string {
+	w.Flags = domain.Flags{}
+	scope := "same-process"
+	if w.CrossBinary {
+		scope = "cross-process"
+	}
+	return "fd_" + strings.TrimPrefix(ID(w, module, scope), "fs_")
+}

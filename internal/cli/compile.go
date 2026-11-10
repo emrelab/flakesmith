@@ -88,7 +88,7 @@ func compileCmd(ctx context.Context, args []string, out IO) error {
 	}
 
 	if dryRun {
-		_, _ = fmt.Fprintf(out.Stdout, "will write: %s\n", filepath.Join(pkgDir, domain.PersistentFileName(sourceFile(pkgDir, c.Witness.Victim.Name))))
+		_, _ = fmt.Fprintf(out.Stdout, "will write: %s\n", filepath.Join(pkgDir, compile.OutputName(pkgDir, sourceFile(pkgDir, c.Witness.Victim.Name), c.Witness.Victim.Name)))
 		_, _ = fmt.Fprintf(out.Stdout, "command   : %s\n", compile.CommandLine(c))
 		return nil
 	}

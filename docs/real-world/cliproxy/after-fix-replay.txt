@@ -1,0 +1,6 @@
+
+capsule: fs_45d3dfda4ce1 (order)
+victim : TestCodexClientModelsApplyPatchRouting
+run    : 0/2 reproduced
+result : never reproduced — the flake may already be fixed (stale capsule)
+flakesmith: flake could not be reproduced

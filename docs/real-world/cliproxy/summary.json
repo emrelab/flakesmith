@@ -1,0 +1,18 @@
+{
+  "repository": "https://github.com/router-for-me/CLIProxyAPI.git",
+  "upstream": "https://github.com/router-for-me/CLIProxyAPI/pull/7356",
+  "base": "0074897481fee1dcd595c1caa1d57e6a379b6be6",
+  "fix": "e056459bd00de0c63bbf5e09879704b0d53fd142",
+  "package": "sdk/api/handlers/openai",
+  "victim": "TestCodexClientModelsApplyPatchRouting",
+  "polluters": [
+    "TestResponsesWebsocketHomeSelectedAuthCallbackPinsAndReusesFirstSelection"
+  ],
+  "searchGoFlags": "-run=^(TestCodexClientModelsApplyPatchRouting|TestResponsesWebsocketHomeSelectedAuthCallbackPinsAndReusesFirstSelection)$",
+  "replayBefore": "5/5",
+  "compileBefore": "verified (RED)",
+  "afterFix": "PASS",
+  "replayAfter": "0/2, exit 3",
+  "go": "go version go1.27.3 darwin/arm64",
+  "platform": "macOS-27.2-arm64-arm-64bit-Mach-O"
+}

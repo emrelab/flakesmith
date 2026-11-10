@@ -1,0 +1,5 @@
+
+capsule: fs_8fbbcdffd315 (order)
+victim : TestSlugMake
+run    : 5/5 reproduced
+result : deterministic

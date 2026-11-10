@@ -1,0 +1,63 @@
+{
+  "schema": "flakesmith/v1",
+  "id": "fs_8fbbcdffd315",
+  "createdAt": "2026-11-10T13:58:16.308691+03:00",
+  "repo": {
+    "module": "github.com/gosimple/slug",
+    "commit": "1eab316",
+    "dirty": false
+  },
+  "tool": {
+    "version": "dev",
+    "go": "go1.27.3",
+    "os": "darwin",
+    "arch": "arm64"
+  },
+  "target": {
+    "package": "github.com/gosimple/slug",
+    "relDir": ".",
+    "victim": "TestSlugMake",
+    "victimFile": "slug_test.go",
+    "victimLine": 14
+  },
+  "kind": "order",
+  "witness": {
+    "kind": "order",
+    "victim": {
+      "package": "github.com/gosimple/slug",
+      "name": "TestSlugMake"
+    },
+    "polluters": [
+      {
+        "package": "",
+        "name": "TestSlugMakeUserSubstituteLang"
+      }
+    ],
+    "steps": [
+      {
+        "label": "polluter/TestSlugMakeUserSubstituteLang"
+      },
+      {
+        "label": "victim/TestSlugMake"
+      }
+    ],
+    "flags": {
+      "parallel": 1
+    },
+    "runs": 3,
+    "func": "TestFlakeWitness"
+  },
+  "observation": {
+    "runs": 3,
+    "failures": 3,
+    "deterministic": true,
+    "failureRate": 1
+  },
+  "evidence": {},
+  "repro": {
+    "command": "go test . -run '^TestFlakeWitness$' -count=1 -parallel=1",
+    "generatedTest": "slug_TestSlugMake_flakesmith_test.go"
+  },
+  "status": "confirmed",
+  "verifyStatus": "verified"
+}

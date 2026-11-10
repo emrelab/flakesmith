@@ -1,0 +1,69 @@
+{
+  "schema": "flakesmith/v1",
+  "flakes": [
+    {
+      "schema": "flakesmith/v1",
+      "id": "fs_45d3dfda4ce1",
+      "createdAt": "2026-11-10T13:58:44.208324+03:00",
+      "repo": {
+        "module": "github.com/router-for-me/CLIProxyAPI/v8",
+        "commit": "0074897",
+        "dirty": false
+      },
+      "tool": {
+        "version": "dev",
+        "go": "go1.27.3",
+        "os": "darwin",
+        "arch": "arm64"
+      },
+      "target": {
+        "package": "github.com/router-for-me/CLIProxyAPI/v8/sdk/api/handlers/openai",
+        "relDir": ".",
+        "victim": "TestCodexClientModelsApplyPatchRouting",
+        "victimFile": "codex_client_models_test.go",
+        "victimLine": 314
+      },
+      "kind": "order",
+      "witness": {
+        "kind": "order",
+        "victim": {
+          "package": "github.com/router-for-me/CLIProxyAPI/v8/sdk/api/handlers/openai",
+          "name": "TestCodexClientModelsApplyPatchRouting"
+        },
+        "polluters": [
+          {
+            "package": "",
+            "name": "TestResponsesWebsocketHomeSelectedAuthCallbackPinsAndReusesFirstSelection"
+          }
+        ],
+        "steps": [
+          {
+            "label": "polluter/TestResponsesWebsocketHomeSelectedAuthCallbackPinsAndReusesFirstSelection"
+          },
+          {
+            "label": "victim/TestCodexClientModelsApplyPatchRouting"
+          }
+        ],
+        "flags": {
+          "parallel": 1
+        },
+        "runs": 3,
+        "func": "TestFlakeWitness"
+      },
+      "observation": {
+        "runs": 3,
+        "failures": 3,
+        "deterministic": true,
+        "failureRate": 1
+      },
+      "evidence": {},
+      "repro": {
+        "command": "go test . -run '^TestFlakeWitness$' -count=1 -parallel=1",
+        "generatedTest": "codex_client_models_TestCodexClientModelsApplyPatchRouting_flakesmith_test.go"
+      },
+      "status": "confirmed"
+    }
+  ],
+  "runs": 8,
+  "maxRuns": 200
+}

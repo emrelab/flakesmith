@@ -94,6 +94,20 @@ turns green and guards the regression permanently.
 
 ## Scanned real repos (beyond our own fixtures)
 
+Two targeted upstream cases completed the full lifecycle on November 10, 2026:
+confirmed capsule → replay 5/5 → generated regression RED → upstream fix →
+the same regression GREEN. Both searches used unmodified upstream test bodies.
+
+| Repository / pinned commit | Minimal polluter → victim | Result |
+|---|---|---|
+| `gosimple/slug` @ `1eab316` | `TestSlugMakeUserSubstituteLang` → `TestSlugMake` | order; upstream [#83](https://github.com/gosimple/slug/pull/83) fix validated |
+| `router-for-me/CLIProxyAPI` @ `0074897` | `TestResponsesWebsocketHomeSelectedAuthCallbackPinsAndReusesFirstSelection` → `TestCodexClientModelsApplyPatchRouting` | order; upstream [#7356](https://github.com/router-for-me/CLIProxyAPI/pull/7356) fix validated |
+
+Commands, exact revisions, capsules and before/after evidence:
+[real-world validation](docs/real-world/README.md). These are targeted
+historical reproductions, not a measurement of detection rate across arbitrary
+repositories. The seven earlier scans below remain recorded as they ran.
+
 What a flake hunter should say about a healthy codebase is *nothing* — so the
 first real-world metric is **false positives**, not witnesses:
 
@@ -118,11 +132,11 @@ Across all seven scans: **zero findings, so zero false findings.** We state it
 that way on purpose — seven scans that emitted nothing do not measure a false
 positive *rate*; they only show the hunter stayed quiet on healthy code. Every
 witness flakesmith does emit must deterministically replay (that is the
-contract the capsule carries), and a rate will be quoted only once real
-witnesses exist.
-Hunting ≥2 confirmed real-world `polluter→victim` pairs is the tracked next
-milestone ([#1](https://github.com/emrelab/flakesmith/issues/1)) — this table will only
-ever list scans that actually ran.
+contract the capsule carries). The targeted cases above add witnesses, but
+neither they nor these seven scans establish a general false-positive rate.
+The two targeted reproductions above complete the real-world witness
+milestone ([#1](https://github.com/emrelab/flakesmith/issues/1)); the seven
+earlier scans remain evidence only about those specific scans.
 
 ## Commands
 
@@ -144,6 +158,23 @@ takes `--changed` ·
 (cross-binary suspect, see below) · `--sarif FILE` (write SARIF 2.1.0 alongside
 any format — one hunt feeds both the job summary and code scanning). `compile`
 also takes `--pkg DIR`, `--print`, `--dry-run` and `--verify`.
+
+Baselines use commit-independent defect fingerprints (`flakesmith/baseline/v2`),
+so an unrelated commit does not turn a known flake into a new finding. The
+fingerprint covers module, victim package/name, class, polluter identities,
+environment keys and same-/cross-process shape; run flags and provenance stay
+in the capsule. Legacy v1 baselines must be regenerated explicitly with
+`flakesmith hunt ./... --write-baseline` (add `--baseline FILE` for a custom
+path). Scan every previously baselined package: v1 hashes cannot be migrated
+without their witnesses. Corrupt baseline files are refused, including during
+`--write-baseline`.
+
+New regression files include the victim name, for example
+`checkout_TestVictim_flakesmith_test.go`. Compiling a second victim from the
+same source file preserves the first. Recompiling one victim updates that
+victim's regression; an existing legacy generated file is reused for its own
+victim to avoid duplicate declarations. User-owned output files are never
+overwritten.
 
 `compile --verify` keeps three verdicts apart — `verified` (the red reproduced),
 `green-not-reproduced` and `skipped-missing-env` — records the one it got in

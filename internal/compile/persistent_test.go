@@ -150,7 +150,7 @@ func TestGeneratedTestIsExcludedWithoutTag(t *testing.T) {
 
 func TestWriteRefusesForeignFile(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "order_flakesmith_test.go")
+	path := filepath.Join(dir, "order_TestVictim_flakesmith_test.go")
 	if err := os.WriteFile(path, []byte("package p\n// handwritten by a user\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -351,5 +351,40 @@ func TestPlainWitnessOmitsRace(t *testing.T) {
 	}
 	if spec := compile.VerifySpec(c, "."); spec.Race {
 		t.Error("VerifySpec.Race must be false for a non-race witness")
+	}
+}
+
+func TestWriteRetainsLegacyVictimWithoutOverwritingSibling(t *testing.T) {
+	dir := t.TempDir()
+	first := capsule()
+	src, err := compile.Render(first, "orderbasic")
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy := filepath.Join(dir, domain.PersistentFileName("checkout_test.go"))
+	if err := os.WriteFile(legacy, src, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	opt := compile.Options{Dir: dir, SourceFile: "checkout_test.go", Write: true}
+	second := capsule()
+	second.Witness.Victim.Name = "TestOtherVictim"
+	path, err := compile.Write(second, "orderbasic", opt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if path == legacy {
+		t.Fatal("second victim overwrote legacy regression")
+	}
+	if got, err := os.ReadFile(legacy); err != nil || !bytes.Equal(got, src) {
+		t.Fatalf("legacy lost: %v", err)
+	}
+	// Updating the original must reuse its old path, avoiding duplicate declarations.
+	first.ID = "fs_updated"
+	got, err := compile.Write(first, "orderbasic", opt)
+	if err != nil || got != legacy {
+		t.Fatalf("legacy update: %s %v", got, err)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatal("sibling lost", err)
 	}
 }

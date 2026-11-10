@@ -1,0 +1,6 @@
+
+capsule: fs_8fbbcdffd315 (order)
+victim : TestSlugMake
+run    : 0/2 reproduced
+result : never reproduced — the flake may already be fixed (stale capsule)
+flakesmith: flake could not be reproduced

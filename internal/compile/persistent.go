@@ -3,7 +3,10 @@ package compile
 import (
 	"bytes"
 	"fmt"
+	"go/ast"
 	"go/format"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -223,7 +226,7 @@ func Write(c domain.Capsule, clause string, opt Options) (string, error) {
 		return "", nil
 	}
 
-	name := domain.PersistentFileName(opt.SourceFile)
+	name := OutputName(opt.Dir, opt.SourceFile, c.Witness.Victim.Name)
 	path := filepath.Join(opt.Dir, name)
 
 	if existing, err := os.ReadFile(path); err == nil {
@@ -344,4 +347,20 @@ func VerifySpec(c domain.Capsule, dir string) domain.RunSpec {
 		spec.Parallel = parallelWidth(c, c.Witness.Steps)
 	}
 	return spec
+}
+
+// OutputName retains an existing legacy file for its own victim only. New
+// victims get separate paths; recompiling either victim never removes another.
+func OutputName(dir, source, victim string) string {
+	legacy := domain.PersistentFileName(source)
+	if src, err := os.ReadFile(filepath.Join(dir, legacy)); err == nil && isGenerated(src) {
+		if file, err := parser.ParseFile(token.NewFileSet(), legacy, src, 0); err == nil {
+			for _, decl := range file.Decls {
+				if fn, ok := decl.(*ast.FuncDecl); ok && fn.Name.Name == domain.PersistentFuncName(victim) {
+					return legacy
+				}
+			}
+		}
+	}
+	return domain.PersistentFileName(source, victim)
 }

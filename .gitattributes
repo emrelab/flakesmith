@@ -1,0 +1,2 @@
+# Preserve upstream unified diffs verbatim: context prefixes precede original tabs.
+docs/real-world/*/upstream-fix.patch -whitespace

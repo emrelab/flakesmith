@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/emrelab/flakesmith/internal/capsule"
+	"github.com/emrelab/flakesmith/internal/compile"
 	"github.com/emrelab/flakesmith/internal/domain"
 	"github.com/emrelab/flakesmith/internal/evidence"
 	"github.com/emrelab/flakesmith/internal/facts"
@@ -113,7 +114,7 @@ type scanner struct {
 	fresh int
 	// when baseline is set (--baseline), ids are compared.
 	baseline domain.Baseline
-	// ids are the confirmed capsule ids written by this run (--write-baseline).
+	// ids are the confirmed defect fingerprints found by this run (--write-baseline).
 	ids []string
 	// collected holds the capsules a json run emits at the end. A streaming
 	// pretty-printer would produce one object per capsule — not JSON.
@@ -303,12 +304,13 @@ func (s *scanner) pkg(ctx context.Context, pkgArg string) error {
 			return err
 		}
 		s.found++
-		s.ids = append(s.ids, c.ID)
+		fingerprint := capsule.Fingerprint(c.Witness, c.Repo.Module)
+		s.ids = append(s.ids, fingerprint)
 		// A known flake is reported but not counted; silently swallowing it
 		// would let the user say "clean". stderr: in text mode stdout is the
 		// witness report, in json mode the one-document rule applies.
 		if len(s.baseline.IDs) > 0 {
-			if s.baseline.Contains(c.ID) {
+			if s.baseline.Contains(fingerprint) {
 				_, _ = fmt.Fprintf(s.out.Stderr, "known flake: %s (%s:%s)\n",
 					c.ID, c.Target.Package, c.Target.Victim)
 			} else {
@@ -496,6 +498,10 @@ func writeBaselineFile(out IO, s *scanner, path string) error {
 	ids := append([]string(nil), s.ids...)
 	if existing, err := capsule.LoadBaseline(path); err == nil {
 		ids = append(ids, existing.IDs...)
+	} else if errors.Is(err, capsule.ErrLegacyBaseline) {
+		_, _ = fmt.Fprintln(out.Stderr, "replacing baseline v1 with fingerprints from this scan; rescan every previously baselined package")
+	} else if !baselineMissing(path) {
+		return err
 	}
 	if err := capsule.WriteBaseline(path, ids); err != nil {
 		return err
@@ -663,7 +669,7 @@ func buildCapsule(w *domain.Witness, dir string, st repoState, f facts.PkgFacts,
 	c.Witness.Steps = stepsFor(w)
 	c.ID = capsule.ID(c.Witness, st.Module, st.Commit)
 	c.Repro.Command = reproCommand(c)
-	c.Repro.GeneratedTest = domain.PersistentFileName(targetSourceFile(dir, w.Victim.Name))
+	c.Repro.GeneratedTest = compile.OutputName(dir, targetSourceFile(dir, w.Victim.Name), w.Victim.Name)
 	return c
 }
 
@@ -880,4 +886,9 @@ func modulePath(dir string) string {
 		}
 		cur = parent
 	}
+}
+
+func baselineMissing(path string) bool {
+	_, err := os.Stat(path)
+	return os.IsNotExist(err)
 }

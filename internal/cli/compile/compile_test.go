@@ -1,6 +1,10 @@
 package clicompile
 
 import (
+	"bytes"
+	"github.com/emrelab/flakesmith/internal/capsule"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -28,6 +32,8 @@ func TestCompileVerifyReproducesEachClass(t *testing.T) {
 		code    int
 	}{
 		{"order-basic", "", "RED", domain.ExitOK},
+		{"registry-leak", "", "RED", domain.ExitOK},
+		{"substitution-leak", "", "RED", domain.ExitOK},
 		{"repeat-accumulate", "", "RED", domain.ExitOK},
 		{"parallel-race", "", "RED", domain.ExitOK},
 		{"env-dependent", "", "unverified", domain.ExitNotReproduced},
@@ -120,7 +126,7 @@ func TestCompilePrintDryRunAndWriteTarget(t *testing.T) {
 	}
 	// The capsule stores the directory as the user typed it (relative), so the
 	// written path prints relative too. The comparison uses absolute paths.
-	want := filepath.Join(dir, "checkout"+domain.PersistentFileSuffix)
+	want := filepath.Join(dir, domain.PersistentFileName("checkout_test.go", "TestVictim"))
 	line, _, _ := strings.Cut(strings.TrimPrefix(out, "regression test written: "), "\n")
 	got, err := filepath.Abs(strings.TrimSpace(line))
 	if err != nil {
@@ -152,7 +158,73 @@ func TestCompilePositionalPackageDir(t *testing.T) {
 	if code != domain.ExitOK {
 		t.Fatalf("code=%d %s", code, errOut)
 	}
-	if !strings.Contains(out, "will write: "+filepath.Join(dir, "checkout"+domain.PersistentFileSuffix)) {
+	if !strings.Contains(out, "will write: "+filepath.Join(dir, domain.PersistentFileName("checkout_test.go", "TestVictim"))) {
 		t.Errorf("dry-run target is wrong:\n%s", out)
+	}
+}
+
+func TestCompilePreservesMultipleVictimsInOneSource(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test")
+	}
+	dir := clitest.FixtureDir(t, "multiple-victims")
+	store := t.TempDir()
+	if code, _, stderr := clitest.Run("hunt", dir, "--capsule-dir", store); code != 0 {
+		t.Fatalf("hunt: %d %s", code, stderr)
+	}
+	ids, err := capsule.NewStore(store).List()
+	if err != nil || len(ids) != 2 {
+		t.Fatalf("capsules=%v err=%v", ids, err)
+	}
+	paths := map[string][]byte{}
+	for _, id := range ids {
+		c, err := capsule.NewStore(store).Read(id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if code, out, stderr := clitest.Run("replay", id, "--capsule-dir", store, "--pkg", dir, "-n", "2"); code != 0 {
+			t.Fatalf("replay: %d %s %s", code, out, stderr)
+		}
+		if code, out, stderr := clitest.Run("compile", id, "--capsule-dir", store, "--pkg", dir, "--verify"); code != 0 {
+			t.Fatalf("compile: %d %s %s", code, out, stderr)
+		}
+		path := filepath.Join(dir, c.Repro.GeneratedTest)
+		src, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(src), "func "+domain.PersistentFuncName(c.Witness.Victim.Name)+"(") {
+			t.Fatalf("wrong victim in %s", path)
+		}
+		paths[path] = src
+	}
+	if len(paths) != 2 {
+		t.Fatalf("victims share output: %v", paths)
+	}
+	for _, id := range ids {
+		if code, out, stderr := clitest.Run("compile", id, "--capsule-dir", store, "--pkg", dir, "--verify"); code != 0 {
+			t.Fatalf("recompile: %d %s %s", code, out, stderr)
+		}
+	}
+	for path, before := range paths {
+		after, err := os.ReadFile(path)
+		if err != nil || !bytes.Equal(before, after) {
+			t.Fatalf("regression changed/disappeared: %s: %v", path, err)
+		}
+	}
+	// Each generated test was verified red above; both must turn green after the fix.
+	path := filepath.Join(dir, "state_test.go")
+	src, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	src = bytes.ReplaceAll(src, []byte("dirtyA, dirtyB = true, true"), []byte("dirtyA, dirtyB = false, false"))
+	if err := os.WriteFile(path, src, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("go", "test", "-tags", "flakesmith", "-run", "^TestFlakeRegression_", "-count=1", ".")
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("regressions after fix: %v\n%s", err, out)
 	}
 }

@@ -107,7 +107,7 @@ func (s Store) List() ([]string, error) {
 	}
 	var items []item
 	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") || strings.HasPrefix(e.Name(), ".tmp-") {
+		if e.IsDir() || e.Name() == BaselineFileName || !strings.HasSuffix(e.Name(), ".json") || strings.HasPrefix(e.Name(), ".tmp-") {
 			continue
 		}
 		info, err := e.Info()

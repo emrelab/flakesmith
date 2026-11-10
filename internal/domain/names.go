@@ -30,10 +30,14 @@ func IsWitnessFileName(name string) bool {
 }
 
 // PersistentFileName is the persistent regression test file.
-// "checkout_test.go" -> "checkout_flakesmith_test.go"
-func PersistentFileName(sourceFile string) string {
+// A victim suffix prevents two tests in one source file overwriting each other.
+// Omitting victim returns the legacy path for upgrade compatibility.
+func PersistentFileName(sourceFile string, victim ...string) string {
 	base := strings.TrimSuffix(sourceFile, "_test.go")
 	base = strings.TrimSuffix(base, ".go")
+	if len(victim) > 0 && victim[0] != "" {
+		base += "_" + victim[0]
+	}
 	return base + PersistentFileSuffix
 }
 

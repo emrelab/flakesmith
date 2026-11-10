@@ -12,6 +12,9 @@ import (
 	"github.com/emrelab/flakesmith/internal/domain"
 )
 
+// ErrLegacyBaseline requires an explicit rescan; v1 hashes cannot be reversed.
+var ErrLegacyBaseline = errors.New("baseline v1 uses commit-specific capsule IDs; regenerate with hunt --write-baseline")
+
 // BaselineFileName is the name of the known-flake list inside the capsule directory.
 const BaselineFileName = "baseline.json"
 
@@ -41,6 +44,9 @@ func LoadBaseline(path string) (domain.Baseline, error) {
 	}
 	if err := json.Unmarshal(data, &b); err != nil {
 		return b, fmt.Errorf("%w: baseline is corrupt (%s): %v", domain.ErrUsage, path, err)
+	}
+	if b.Schema == "flakesmith/baseline/v1" {
+		return b, fmt.Errorf("%w: %w", domain.ErrUsage, ErrLegacyBaseline)
 	}
 	if b.Schema != domain.BaselineSchemaVersion {
 		return b, fmt.Errorf("%w: baseline schema version not supported: %q (expected %q)",

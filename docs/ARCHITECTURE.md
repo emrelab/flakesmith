@@ -719,7 +719,7 @@ is gone". Provenance, not identity.
   },
   "repro": {
     "command": "go test ./internal/checkout -tags flakesmith -run '^TestFlakeRegression_TestCheckout$' -count=1 -parallel=1",
-    "generatedTest": "checkout_flakesmith_test.go"
+    "generatedTest": "checkout_TestVictim_flakesmith_test.go"
   },
   "status": "confirmed"
 }
@@ -851,7 +851,17 @@ No panic when the budget is exceeded: a `status: partial` capsule is written and
 
 The distinguishing rule: `hunt` asks "I looked around, there's nothing" — even a
 found flake exits 0 while the gate is closed. `repro` asks about a single suspect;
-if no answer comes, the request has failed (3). With `--baseline`, known identities do
+if no answer comes, the request has failed (3). With `--baseline`, v2 stores commit-independent defect fingerprints, separate
+from capsule IDs. A fingerprint includes module, victim package/name, class,
+sorted polluter identities, env keys and same-/cross-process shape. Commit,
+dirty status, generated name, repetition count, parallel width and race flags
+are excluded. Capsule IDs and provenance retain their existing semantics.
+Legacy v1 baselines are refused with regeneration guidance; explicitly running
+`hunt ./... --write-baseline` replaces a v1 file using only the confirmed
+findings from that scan. Scan all previously covered packages. Invalid files
+are never silently overwritten.
+
+With `--baseline`, known identities do
 not turn `hunt` red; only **new** flakes produce 1 with `--fail-on-flake`.
 
 `--format json` always produces **a single document**; it is not line-delimited JSON:
@@ -1006,3 +1016,11 @@ This fence is the written answer to "one more feature" requests: every item is a
 | First working slice? | `hunt` + repeat probe + capsule (first end-to-end build) |
 | MVP? | four probes + `compile` (shipped in `v0.1.0`) |
 | What it doesn't do? | Dashboard, SaaS, LLM, runtime patch, DB replay |
+
+### Regression output ownership
+
+New persistent files use `<source>_<victim>_flakesmith_test.go`, one regression
+per victim, so compiling siblings cannot erase earlier regressions. Recompiling
+a victim updates its existing witness. For upgrades, a legacy generated
+`<source>_flakesmith_test.go` declaring that victim's regression is reused;
+other victims get separate files. Output owned by the user is still refused.

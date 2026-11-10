@@ -1,0 +1,18 @@
+{
+  "repository": "https://github.com/gosimple/slug.git",
+  "upstream": "https://github.com/gosimple/slug/pull/83",
+  "base": "1eab3167af84fc96dbabe7b5d9c22d6d4c214800",
+  "fix": "76470d7e1c9c8bb5cf9b9df392b9fb5f35b77e9a",
+  "package": ".",
+  "victim": "TestSlugMake",
+  "polluters": [
+    "TestSlugMakeUserSubstituteLang"
+  ],
+  "searchGoFlags": "-shuffle=3",
+  "replayBefore": "5/5",
+  "compileBefore": "verified (RED)",
+  "afterFix": "PASS",
+  "replayAfter": "0/2, exit 3",
+  "go": "go version go1.27.3 darwin/arm64",
+  "platform": "macOS-27.2-arm64-arm-64bit-Mach-O"
+}

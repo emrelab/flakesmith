@@ -1,0 +1,6 @@
+regression test written: codex_client_models_TestCodexClientModelsApplyPatchRouting_flakesmith_test.go
+run              : go test . -tags flakesmith -run '^TestFlakeRegression_TestCodexClientModelsApplyPatchRouting$' -count=1 -parallel=1
+verification     : RED (verified — the flake is still there)
+
+Note: the test will be RED right now (the flake is not fixed yet).
+     After the fix it turns green and guards the regression permanently.

@@ -131,7 +131,7 @@ below). The real output, indented because it contains a fence of its own:
     go test . -run '^TestFlakeWitness$' -count=1 -parallel=1
     ```
     
-    Permanent regression test: `checkout_flakesmith_test.go` (build tag `flakesmith`).
+    Permanent regression test: `checkout_TestVictim_flakesmith_test.go` (build tag `flakesmith`).
     
 - `--format markdown` is the comment body, byte for byte — no templating needed.
 - `--from-json` resolves import paths with `go list`, so it must run inside the
