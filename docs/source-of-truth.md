@@ -1,5 +1,4 @@
 ---
-render_with_liquid: false
 layout: default
 title: Source of truth
 ---

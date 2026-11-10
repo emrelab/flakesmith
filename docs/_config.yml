@@ -13,6 +13,12 @@ plugins:
 # of copying raw markdown; relative-links rewrites the .md links between those
 # pages to the .html the build emits, which is what keeps ARCHITECTURE.md a
 # working link on the site.
+#
+# Liquid runs before markdown, so any Go template or Actions expression in a
+# code fence ({{.Package}}, ${{ steps.hunt.outputs.report }}) would be evaluated
+# and silently blanked. render_with_liquid: false does NOT help here — it is a
+# Document feature and these are Pages in Jekyll 3.10 — so the affected fences
+# are wrapped in {% raw %}...{% endraw %} instead.
 relative_links:
   enabled: true
   collections: false

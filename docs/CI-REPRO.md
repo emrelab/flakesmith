@@ -1,5 +1,4 @@
 ---
-render_with_liquid: false
 layout: default
 title: CI reproduction recipe
 ---
@@ -33,6 +32,7 @@ Two jobs: the existing test job saves its `-json` log even when it fails, and a
 follow-up job turns that log into a comment. Drop it into the workflow that
 already runs `go test`.
 
+{% raw %}
 ```yaml
 permissions:
   contents: read
@@ -112,6 +112,7 @@ jobs:
           path: "**/.flakesmith/*.json"
           if-no-files-found: ignore
 ```
+{% endraw %}
 
 ## What was verified, and what was not
 
