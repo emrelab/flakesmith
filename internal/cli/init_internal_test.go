@@ -32,7 +32,7 @@ func TestReplayScaffoldGatePreservesExitContract(t *testing.T) {
 	script := strings.Join(lines, "\n")
 	for input, want := range map[int]int{0: 1, 3: 0, 6: 6, 130: 130} {
 		cmd := exec.Command("bash", "-c", script)
-		cmd.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"), "RUNNER_TEMP="+dir, "REPLAY_STATUS="+strconv.Itoa(input))
+		cmd.Env = append(os.Environ(), "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"), "RUNNER_TEMP="+filepath.ToSlash(dir), "REPLAY_STATUS="+strconv.Itoa(input))
 		output, err := cmd.CombinedOutput()
 		got := 0
 		if err != nil {
