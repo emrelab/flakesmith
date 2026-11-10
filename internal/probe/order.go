@@ -24,9 +24,9 @@ import (
 //   - Sequence is only meaningful at -parallel=1. With t.Parallel the JSON
 //     "run" order reflects the pause point, not execution, so a witness
 //     derived from it would be fiction. Parallel flakes are a separate class.
-//   - Every call goes through a generated witness file. `go test -run
-//     '^(TestA|TestB)$'` executes in SOURCE order regardless of the regex
-//     alternation (verified on Go 1.26.2), so there is no flag that reorders.
+//   - Same-clause chains use a generated file. Mixed clauses use a measured
+//     top-level selection with the observed shuffle seed; regex alternation
+//     alone never defines execution order.
 type Order struct {
 	// Seeds are the -shuffle seeds to try before giving up. 0 -> DefaultSeeds.
 	Seeds []int64
@@ -113,7 +113,7 @@ func (p Order) Probe(ctx context.Context, tgt Target, r gotest.Runner) (*domain.
 		if alone.Failed(tgt.Test.Name) {
 			return nil, ErrNotReproduced
 		}
-		return p.minimize(ctx, tgt, r, all.Order, verify)
+		return p.minimize(ctx, tgt, r, all.Order, verify, 0)
 	}
 
 	// (3) Shuffle search. This is what makes order-dependence findable in a
@@ -132,14 +132,14 @@ func (p Order) Probe(ctx context.Context, tgt Target, r gotest.Runner) (*domain.
 			return nil, buildFailed(tgt, res)
 		}
 		if res.Failed(tgt.Test.Name) {
-			return p.minimize(ctx, tgt, r, res.Order, verify)
+			return p.minimize(ctx, tgt, r, res.Order, verify, seed)
 		}
 	}
 	return nil, ErrNotReproduced
 }
 
 // minimize shrinks the set of tests that ran before the victim.
-func (p Order) minimize(ctx context.Context, tgt Target, r gotest.Runner, order []string, verify int) (*domain.Witness, error) {
+func (p Order) minimize(ctx context.Context, tgt Target, r gotest.Runner, order []string, verify int, seed int64) (*domain.Witness, error) {
 	candidates := before(order, tgt.Test.Name)
 	if len(candidates) == 0 {
 		// The failure came from the environment, not from a sibling test.
@@ -151,8 +151,7 @@ func (p Order) minimize(ctx context.Context, tgt Target, r gotest.Runner, order 
 	// test binary, so their tests do run in the same process — but the witness
 	// file is generated into one clause and calls functions by name, and a test
 	// function of the other clause is not addressable from there
-	// ("undefined: TestOther"). We cannot express such a polluter, so it must
-	// be reported, never silently dropped into "no flake".
+	// ("undefined: TestOther"). A mixed-clause polluter therefore needs a measured top-level selection.
 	same, cross := splitByClause(candidates, tgt.Facts.Clause, tgt.Test.Name)
 
 	clause, fn, err := p.witnessShape(tgt)
@@ -161,17 +160,20 @@ func (p Order) minimize(ctx context.Context, tgt Target, r gotest.Runner, order 
 	}
 
 	if len(same) == 0 && len(cross) > 0 {
-		return nil, crossClauseError(tgt, cross, "order witness")
+		return p.minimizeSelection(ctx, tgt, r, candidates, verify, seed)
 	}
 
 	pred := p.predicate(tgt, r, clause, fn)
 	min, err := search.Minimize(ctx, same, pred, verify)
-	if err != nil {
+	var uncertain *search.VerificationError
+	if errors.As(err, &uncertain) && uncertain.Observation.Failures > 0 {
+		// Keep the candidate as suspected, while the registry may still find a confirmed explanation.
+	} else if err != nil {
 		// Nothing in the victim's binary reproduces the failure, yet the
 		// package as a whole did fail: the missing ingredient is on the other
-		// side of the binary boundary.
+		// side of the visibility boundary.
 		if errors.Is(err, domain.ErrNotReproducible) && len(cross) > 0 {
-			return nil, crossClauseError(tgt, cross, "order witness")
+			return p.minimizeSelection(ctx, tgt, r, candidates, verify, seed)
 		}
 		return nil, err
 	}
@@ -185,7 +187,7 @@ func (p Order) minimize(ctx context.Context, tgt Target, r gotest.Runner, order 
 	}
 	steps = append(steps, domain.Step{Label: domain.VictimLabel(tgt.Test.Name), Test: tgt.Test})
 
-	return &domain.Witness{
+	w := &domain.Witness{
 		Kind:      domain.KindOrder,
 		Victim:    tgt.Test,
 		Polluters: min,
@@ -196,7 +198,12 @@ func (p Order) minimize(ctx context.Context, tgt Target, r gotest.Runner, order 
 		// file; recomputing it later (from a package that has since gained a
 		// TestFlakeWitness) would collide and read as "flake fixed".
 		Func: fn,
-	}, nil
+	}
+	if uncertain != nil {
+		w.Verification = &uncertain.Observation
+		return w, uncertain
+	}
+	return w, nil
 }
 
 // predicate builds "install a witness of subset + victim, run it, did the
@@ -277,7 +284,7 @@ func firstLine(s string) string {
 }
 
 // splitByClause divides candidates into those a witness for victim can call and
-// those it cannot, because they belong to the other test binary.
+// those it cannot, because they belong to the other visibility clause.
 //
 // A candidate without a known clause (a subtest name, or a name the AST scan
 // did not see) is treated as same-clause: dropping it on a guess would lose
@@ -324,4 +331,33 @@ func before(order []string, victim string) []domain.TestID {
 		out = append(out, domain.TestID{Name: name})
 	}
 	return nil
+}
+
+// minimizeSelection preserves a real top-level ordering across visibility clauses.
+// Both clauses belong to one binary; no generated Go file can call both.
+func (p Order) minimizeSelection(ctx context.Context, tgt Target, r gotest.Runner, candidates []domain.TestID, verify int, seed int64) (*domain.Witness, error) {
+	pred := func(ctx context.Context, subset []domain.TestID) (bool, error) {
+		w := domain.Witness{Victim: tgt.Test, Polluters: subset}
+		res, err := r.Run(ctx, domain.RunSpec{Package: tgt.Dir, RunRegex: domain.SelectionRegex(w), Count: 1, Parallel: 1, ShuffleSeed: seed})
+		if err != nil {
+			return false, err
+		}
+		if res.BuildFailed {
+			return false, buildFailed(tgt, res)
+		}
+		// Removing tests changes a seeded permutation: measure the selected subset,
+		// never assume that regex alternation defines execution order.
+		return res.Failed(tgt.Test.Name), nil
+	}
+	min, err := search.Minimize(ctx, candidates, pred, verify)
+	var uncertain *search.VerificationError
+	if err != nil && !(errors.As(err, &uncertain) && uncertain.Observation.Failures > 0) {
+		return nil, err
+	}
+	w := &domain.Witness{Kind: domain.KindOrder, Victim: tgt.Test, Polluters: min, Flags: domain.Flags{Parallel: 1}, Runs: verify, CrossClause: true, Seed: seed}
+	if uncertain != nil {
+		w.Verification = &uncertain.Observation
+		return w, uncertain
+	}
+	return w, nil
 }

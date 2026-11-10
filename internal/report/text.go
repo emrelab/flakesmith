@@ -15,7 +15,11 @@ func Text(w io.Writer, c domain.Capsule) error {
 	v := c.Witness
 	var b strings.Builder
 
-	fmt.Fprintf(&b, "\nflake found: %s\n", v.Victim.Name)
+	label := "flake found"
+	if c.Status == domain.StatusSuspected {
+		label = "suspected flake"
+	}
+	fmt.Fprintf(&b, "\n%s: %s\n", label, v.Victim.Name)
 	fmt.Fprintf(&b, "  package      : %s\n", v.Victim.Package)
 	fmt.Fprintf(&b, "  class        : %s\n", v.Kind)
 
@@ -39,12 +43,18 @@ func Text(w io.Writer, c domain.Capsule) error {
 	}
 
 	fmt.Fprintf(&b, "  run          : %d/%d failed\n", c.Observation.Failures, c.Observation.Runs)
+	if ci := c.Observation.Wilson95; ci != nil {
+		fmt.Fprintf(&b, "  Wilson 95%%   : %.1f%%–%.1f%%\n", ci.Lower*100, ci.Upper*100)
+	}
 	if c.Observation.Deterministic {
 		b.WriteString("  deterministic: yes\n")
 	} else {
 		b.WriteString("  deterministic: no (probabilistic)\n")
 	}
 
+	if len(c.Evidence.ExternalDependencies) > 0 {
+		fmt.Fprintf(&b, "  dependencies : %s (static; not a proven cause)\n", strings.Join(c.Evidence.ExternalDependencies, "; "))
+	}
 	if g := sharedGlobalLine(c); g != "" {
 		fmt.Fprintf(&b, "  evidence     : %s\n", g)
 	}

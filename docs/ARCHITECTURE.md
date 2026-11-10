@@ -735,7 +735,15 @@ back to `TestFlakeWitness`.
 verification. `note` (if present) carries the one-sentence warning that `status`
 does not say: "budget exceeded: 1/1 runs", "not reproduced under a race run".
 
-`status`: `confirmed` | `partial` (budget exhausted) | `probabilistic` (external service; determinism not guaranteed).
+`status`: `confirmed` (all verification rounds reproduced), `suspected`
+(some completed rounds reproduced), or `partial` (interrupted without verdict).
+The legacy `probabilistic` status remains readable. Suspected order/parallel
+candidates retain the measured k/n, rate and two-sided Wilson 95% interval;
+confirmed remains strict N/N. Every verification bypasses result caching,
+including prior passing results. Suspected findings are excluded from baseline
+and flake gate, rendered as SARIF review/note, and cannot be compiled. Replay
+can measure them again without changing their status. A suspected-only hunt
+exits 0; a suspected-only repro exits 3.
 
 ### 9.2. Permanent test
 
@@ -881,9 +889,14 @@ Without `--debug`, no stack trace is shown. A raw panic never leaks to the user 
 
 ### 10.2. Concurrency
 
-- Packages are scanned **sequentially** today; cross-package parallelism (`--jobs`,
-  default `min(NumCPU, 4)`) is on hold as a pending task — we don't
-  pretend it's implemented.
+- `hunt --jobs N` bounds concurrent package scans, default `min(NumCPU, 4)`.
+  Workers share the thread-safe run/time budget and cached runner; reports,
+  counters and capsule lists remain worker-local and merge in package order.
+  Canonical directory deduplication prevents a package from being scheduled twice.
+  An error stops new dispatch while active workers finish honestly; partial
+  findings survive and retain their exit code. `repro` and `--polluter-pkg`
+  scans are serial. Cross-binary sequences lock both directories in canonical
+  order, with context tokens preserving re-entrant ownership of both.
 - **Two runs in the same package are never parallel** — they'd share the same port/temp file/DB and produce false positives against each other. A per-package `sync.Mutex` semaphore and a directory lock (`policy/dirlock`) also prevent a second flakesmith in the same directory.
 - The width inside the `probe/parallel` class is given via `-parallel=N`; that is the witness's own load, not the concurrency of the package scan.
 
@@ -984,12 +997,10 @@ The Red Team analysis (K1) makes this the MVP's survival condition:
 - ❌ **Server / SaaS / account** — none. Local files + CI artifacts.
 - ❌ **LLM / automatic fix** — none. It shows evidence; it does not patch code.
 - ❌ **Go toolchain patch / runtime fork / WASM** — none (ReplayGo's territory).
-- ❌ **DB/HTTP replay** — none. External dependency → `probabilistic` label.
-  One exception in *naming* only: a `testing/synctest` bubble has a virtual
-  clock, so it does not belong to this excuse class — the facts layer flags
-  its users (`PkgFacts.TestSynctest`) and a flagged test whose verdict still
-  varies is a real code bug. flakesmith never wraps someone else's test in a
-  bubble: that would fabricate determinism.
+- ❌ **DB/HTTP replay** — none. Package-wide syntax hints name clock, network,
+  database and random calls before probes but never infer a root cause or skip
+  search. Only call identities are stored. A synctest virtual clock does not
+  isolate external I/O; no bubbles are synthesized around another test.
 - ❌ **Subtest (`t.Run` inner) support** — outside the MVP; explicitly refused with `ErrUnsupportedTest`.
 - ❌ **Cross-package order *within one process*** — none. `--polluter-pkg` runs two `go test`
   processes in a chosen sequence and merges the verdicts, so only state that survives the

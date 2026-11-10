@@ -1,6 +1,9 @@
 package domain
 
-import "strings"
+import (
+	"regexp"
+	"strings"
+)
 
 // Kind is the flake class: the output of the four probes in docs/ARCHITECTURE.md §7.
 type Kind string
@@ -70,14 +73,18 @@ func (s Step) Func() string {
 
 // Witness is the minimal witness found: the smallest set of preceding tests that makes the victim fail.
 type Witness struct {
-	Kind      Kind     `json:"kind"`
-	Victim    TestID   `json:"victim"`
-	Polluters []TestID `json:"polluters,omitempty"`
-	Steps     []Step   `json:"steps"`
-	Flags     Flags    `json:"flags"`
-	Seed      int64    `json:"seed,omitempty"`    // -shuffle seed for KindOrder
-	EnvDiff   []string `json:"envDiff,omitempty"` // key names only
-	Runs      int      `json:"runs"`              // verified over how many runs
+	// Verification carries completed independent rounds when strict confirmation failed.
+	Verification *Observation `json:"verification,omitempty"`
+	// CrossClause replays top-level tests in one process instead of generating a cross-visibility call chain.
+	CrossClause bool     `json:"crossClause,omitempty"`
+	Kind        Kind     `json:"kind"`
+	Victim      TestID   `json:"victim"`
+	Polluters   []TestID `json:"polluters,omitempty"`
+	Steps       []Step   `json:"steps"`
+	Flags       Flags    `json:"flags"`
+	Seed        int64    `json:"seed,omitempty"`    // -shuffle seed for KindOrder
+	EnvDiff     []string `json:"envDiff,omitempty"` // key names only
+	Runs        int      `json:"runs"`              // verified over how many runs
 	// Func is the generated witness function name this witness was proven with
 	// ("TestFlakeWitness", or "TestFlakeWitness_2" when the package already
 	// defines TestFlakeWitness).
@@ -109,4 +116,14 @@ func (w *Witness) FuncName() string {
 }
 
 // Minimal reports whether this is a verified minimal witness (at least one polluter and at least 2 runs).
-func (w *Witness) Minimal() bool { return len(w.Polluters) > 0 && w.Runs >= 2 }
+func (w *Witness) Minimal() bool { return w.Verification == nil && len(w.Polluters) > 0 && w.Runs >= 2 }
+
+// SelectionRegex selects the recorded top-level tests in one test binary.
+func SelectionRegex(w Witness) string {
+	names := make([]string, 0, len(w.Polluters)+1)
+	for _, p := range w.Polluters {
+		names = append(names, regexp.QuoteMeta(p.Name))
+	}
+	names = append(names, regexp.QuoteMeta(w.Victim.Name))
+	return "^(" + strings.Join(names, "|") + ")$"
+}

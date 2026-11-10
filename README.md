@@ -200,18 +200,41 @@ note — evidence is never invented.
   "runs": 42, "maxRuns": 1000 }
 ```
 
+`flakesmith init --replay-capsule .flakesmith/fs_ID.json` adds a regression
+gate for a committed capsule: replayed failure turns CI red, a strictly
+non-reproducing witness turns it green, and build/cancellation errors remain
+errors. Cross-binary capsules replay both stages; no generated test is needed.
+
+`hunt --jobs N` scans up to N package directories concurrently (default
+`min(NumCPU, 4)`). All workers share one run/time budget and reports merge in
+package order. Use `--jobs 1` for repositories whose different packages share
+external state. `--polluter-pkg` scans are serialized so their two-stage
+sequences cannot overlap sibling package scans. `repro` remains serial.
+
+| Capsule status | Meaning | CI behavior |
+|---|---|---|
+| `confirmed` | every verification round reproduced | eligible for `--fail-on-flake`, baseline and compile |
+| `suspected` | some verification rounds reproduced; reports include k/n and Wilson 95% interval | advisory SARIF review/note; excluded from gate/baseline; compile refuses |
+| `partial` | scan stopped before a verdict | exit 4 for budget, 130 for cancellation |
+
+A suspected-only hunt returns 0 with its findings; a suspected-only `repro`
+returns 3 because strict reproduction was not achieved. `replay` can gather new
+observations from a suspected capsule without promoting its stored status.
+Intervals summarize the small observed sample; they do not promise a future
+failure rate. The JSON Action `flakes` output counts confirmed findings only.
+
 ## Exit codes
 
 CI scripts bind to these; no path fails silently with 0.
 
 | Code | Meaning |
 |---|---|
-| `0` | clean scan (`hunt`), or a flake was found (gate off) |
-| `1` | flake found (`--fail-on-flake`) |
+| `0` | completed `hunt` (including advisory suspected findings), or confirmed reproduction (gate off) |
+| `1` | new confirmed flake found (`--fail-on-flake`) |
 | `2` | usage error |
 | `3` | `repro`: the requested test did not reproduce within budget; `compile --verify`: the artifact stayed green **or was skipped for a missing env var** |
 | `4` | budget exceeded (partial capsule written) |
-| `5` | unsupported form (pollution that no single-binary witness can express — e.g. an in-memory global across two test binaries) |
+| `5` | unsupported witness form or compile of a non-confirmed/cross-clause/cross-binary capsule |
 | `6` | package does not build |
 | `10` | internal error (detail with `--debug`) |
 | `130` | cancelled (SIGINT); half-written witness files deleted |
@@ -226,11 +249,20 @@ CI scripts bind to these; no path fails silently with 0.
 | `env` — depends on an env var | ✅ | the key is stored in the capsule, **never the value** |
 | subtests (`t.Run` tree) | ✅ | the parent test is called; verdicts fold onto subtests |
 | `TestMain` | ✅ | the witness is installed in the same package, `TestMain` runs too |
-| pollution across two test packages | ⚠️ `--polluter-pkg` | only state that **survives the process boundary** (files, ports): hunt names the two-stage command `go test <polluter> && go test <victim>`, `replay` runs both stages. In-memory globals cannot cross two binaries — no witness is claimed. `compile` refuses these honestly (exit 5) and prints the runnable command |
-| time/network/DB dependent | ❌ | outside environment control — with one naming exception: a `testing/synctest` bubble has a **virtual clock**, the scan names its users, and a flagged test whose verdict still varies is a real code bug, not environment |
+| internal/external test clauses in one directory | ✅ order | one test binary, top-level `-run` selection and recorded shuffle seed; replay supported, compile refuses because one generated file cannot call both clauses |
+| pollution across separate package processes | ⚠️ `--polluter-pkg` | only state that **survives the process boundary** (files, ports): hunt names the two-stage command `go test <polluter> && go test <victim>`, `replay` runs both stages. In-memory globals cannot cross two binaries — no witness is claimed. `compile` refuses these honestly (exit 5) and prints the runnable command |
+| time/network/DB dependent | ⚠️ advisory detection | static clock/network/database/random calls are named on stderr before probing; external services are not controlled or emulated |
 
-Every boundary is **honest**: instead of saying "no flake" in an out-of-scope
-class, it names the class it cannot see.
+Dependency call sites are package-wide syntax hints, not proof of a cause or
+an excuse to skip a reproducible test. Aliased imports are recognized, values
+are never captured, and dynamic dispatch may be invisible. A synctest bubble
+virtualizes its clock but does not make external I/O deterministic. Literal env
+differences continue to record keys only and give the concrete replay input.
+
+The application-global fixture matrix in
+[`testdata/fixtures/app-globals`](testdata/fixtures/app-globals) measures a static
+evidence gap in all three shapes, with no witness recall loss in those three
+cases. Deeper production-code analysis remains deferred pending measured need.
 
 ## GitHub Actions
 

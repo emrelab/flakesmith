@@ -47,6 +47,9 @@ func (c *Cache) Discover(ctx context.Context, pkgDir string) ([]domain.TestID, e
 
 // Run returns a cached PASS/SKIP result when the exact spec was seen before.
 func (c *Cache) Run(ctx context.Context, spec domain.RunSpec) (*domain.RunResult, error) {
+	if domain.RequiresFreshRuns(ctx) {
+		return c.inner.Run(ctx, spec)
+	}
 	key := specKey(spec)
 
 	c.mu.Lock()

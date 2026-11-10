@@ -62,7 +62,8 @@ func (r *Registry) Probes() []Probe {
 
 // Result is what a full hunt produced.
 type Result struct {
-	Witness *domain.Witness
+	Witness   *domain.Witness
+	Suspected *domain.Witness
 	// Tried lists every probe name that ran, in order, with its outcome.
 	Tried []Attempt
 }
@@ -101,14 +102,14 @@ func (r *Registry) Run(ctx context.Context, tgt Target, runner gotest.Runner) (*
 		w, err := p.Probe(ctx, tgt, runner)
 		res.Tried = append(res.Tried, Attempt{Probe: p.Name(), Kind: p.Kind(), Err: err})
 		if err != nil {
+			if w != nil && w.Verification != nil && errorsIs(err, domain.ErrNotReproducible) {
+				res.Suspected = w
+				continue
+			}
 			if isNotReproduced(err) {
 				continue
 			}
-			// A probe that found the shape but cannot express it (cross-clause
-			// order, #6) must not veto the probes after it: the two-binary
-			// engine (OrderCross) can express exactly that finding. The refusal
-			// is remembered — if nothing else reproduces, it is still the
-			// honest final answer and the exit code, never "no flake".
+			// Preserve an unsupported shape while trying later hypotheses.
 			if errorsIs(err, domain.ErrUnsupportedTest) {
 				refusal = err
 				continue
@@ -120,6 +121,9 @@ func (r *Registry) Run(ctx context.Context, tgt Target, runner gotest.Runner) (*
 		}
 		res.Witness = w
 		return res, nil
+	}
+	if res.Suspected != nil {
+		return res, domain.ErrNotReproducible
 	}
 	if refusal != nil {
 		return res, refusal

@@ -2,17 +2,19 @@ package probe
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
 
 	"github.com/emrelab/flakesmith/internal/domain"
 	"github.com/emrelab/flakesmith/internal/gotest"
+	"github.com/emrelab/flakesmith/internal/policy"
 	"github.com/emrelab/flakesmith/internal/search"
 )
 
 // OrderCross detects cross-binary order pollution (#6): a test in another
-// package — or in the other clause of the same directory — ran FIRST, and the
+// package ran FIRST, and the
 // state it left OUTSIDE its process made the victim fail in a later, separate
 // `go test` invocation. Files on disk, bound-then-released ports, cwd edits:
 // all survive the process boundary. In-memory globals do not, and this probe
@@ -31,10 +33,7 @@ import (
 // also the honest shape: CI logs, upstream issues and git blame name a suspect
 // long before a tool could brute-force one.
 type OrderCross struct {
-	// PolluterDir is the package directory the polluters are discovered in.
-	// It may equal the victim's directory: `pkg` and `pkg_test` are two
-	// binaries even inside one directory, and disk pollution crosses that
-	// boundary just like any other.
+	// PolluterDir identifies a separate go test invocation, even if the directory is the same.
 	PolluterDir string
 	// Verify is how many times the two-stage pair must re-flip. 0 -> 3.
 	Verify int
@@ -50,6 +49,11 @@ func (OrderCross) Kind() domain.Kind { return domain.KindOrder }
 
 // Probe implements Probe.
 func (p OrderCross) Probe(ctx context.Context, tgt Target, r gotest.Runner) (*domain.Witness, error) {
+	ctx, unlock, lockErr := policy.LockedDirs(ctx, tgt.Dir, p.PolluterDir)
+	if lockErr != nil {
+		return nil, lockErr
+	}
+	defer unlock()
 	verify := p.Verify
 	if verify <= 0 {
 		verify = 3
@@ -85,7 +89,7 @@ func (p OrderCross) Probe(ctx context.Context, tgt Target, r gotest.Runner) (*do
 	if base.BuildFailed {
 		return nil, buildFailed(tgt, base)
 	}
-	if base.Failed(tgt.Test.Name) {
+	if !base.Passed(tgt.Test.Name) {
 		return nil, ErrNotReproduced
 	}
 
@@ -112,6 +116,9 @@ func (p OrderCross) Probe(ctx context.Context, tgt Target, r gotest.Runner) (*do
 			return false, domain.Wrap(domain.ErrBuildFailed, "polluter package does not build: %s", firstLine(res1.BuildOutput))
 		}
 
+		if res1.ExitCode != 0 {
+			return false, nil
+		}
 		s2 := victim
 		s2.Source = fmt.Sprintf("cross/%d/2", round)
 		res2, err := r.Run(ctx, s2)
@@ -142,7 +149,8 @@ func (p OrderCross) Probe(ctx context.Context, tgt Target, r gotest.Runner) (*do
 	// every verification re-running both stages — determinism across processes
 	// is exactly what this class must prove.
 	min, err := search.Minimize(ctx, cands, pred, verify)
-	if err != nil {
+	var uncertain *search.VerificationError
+	if err != nil && !(errors.As(err, &uncertain) && uncertain.Observation.Failures > 0) {
 		return nil, err
 	}
 	if len(min) == 0 {
@@ -163,7 +171,7 @@ func (p OrderCross) Probe(ctx context.Context, tgt Target, r gotest.Runner) (*do
 		Package: tgt.Test.Package,
 	})
 
-	return &domain.Witness{
+	w := &domain.Witness{
 		Kind:        domain.KindOrder,
 		CrossBinary: true,
 		Victim:      tgt.Test,
@@ -171,7 +179,12 @@ func (p OrderCross) Probe(ctx context.Context, tgt Target, r gotest.Runner) (*do
 		Steps:       steps,
 		Flags:       domain.Flags{Parallel: 1},
 		Runs:        verify,
-	}, nil
+	}
+	if uncertain != nil {
+		w.Verification = &uncertain.Observation
+		return w, uncertain
+	}
+	return w, nil
 }
 
 // unionRegex is the -run pattern that executes exactly the subset, in source

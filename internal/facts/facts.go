@@ -12,6 +12,9 @@ type Pos struct {
 
 // PkgFacts is the static knowledge sheet for one test package directory.
 type PkgFacts struct {
+	// ExternalDependencies are package-wide advisory call sites, not proven causes.
+	ExternalDependencies []string
+
 	// Dir is the package directory as given to Scan.
 	Dir string
 	// ImportPath is resolved from go.mod-relative position when available.
@@ -84,11 +87,8 @@ type PkgFacts struct {
 	// synctest.Go anywhere in its body (bubbles opened by a called helper are
 	// invisible — static scope, same as FileCalls).
 	//
-	// The point is naming, not fixing: a test inside a bubble has a virtual
-	// clock, so its verdict is deterministic BY CONSTRUCTION. A test flagged
-	// here whose verdict still varies is a real code bug, not a loaded machine —
-	// it must not be excused as "time/network/DB dependent", the one class the
-	// tool cannot reproduce. flakesmith never synthesizes bubbles around
+	// The point is naming, not fixing: a bubble provides a virtual clock,
+	// but it does not isolate external I/O or make arbitrary code deterministic. flakesmith never synthesizes bubbles around
 	// someone else's test: that would fabricate determinism.
 	TestSynctest map[string]bool
 

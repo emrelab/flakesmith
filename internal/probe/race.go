@@ -25,6 +25,22 @@ import (
 // A non-empty returned note is written into the report; if empty, the witness
 // was either confirmed or race is not meaningful for this class.
 func ConfirmRace(ctx context.Context, tgt Target, w *domain.Witness, r gotest.Runner) (race bool, note string, err error) {
+	if w.CrossBinary {
+		return false, "race confirmation is not available for a cross-binary sequence", nil
+	}
+	if w.CrossClause {
+		res, e := r.Run(domain.FreshRuns(ctx), domain.RunSpec{Package: tgt.Dir, RunRegex: domain.SelectionRegex(*w), Count: 1, Parallel: 1, ShuffleSeed: w.Seed, Race: true})
+		if e != nil {
+			return false, "", e
+		}
+		if res.BuildFailed {
+			return false, "", buildFailed(tgt, res)
+		}
+		if !res.Failed(w.Victim.Name) {
+			return false, "witness did not reproduce under -race", nil
+		}
+		return true, "", nil
+	}
 	switch w.Kind {
 	case domain.KindOrder, domain.KindParallel:
 		return confirmChain(ctx, tgt, w, r)

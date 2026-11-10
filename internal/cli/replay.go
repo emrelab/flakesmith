@@ -52,12 +52,12 @@ func replayCmd(ctx context.Context, args []string, out IO) error {
 	if err != nil {
 		return domain.Wrap(domain.ErrUsage, "%s", err)
 	}
-	if c.Witness.CrossBinary {
-		return replayCross(ctx, c, pkgArg, storeDir, n, polluterArg, out)
-	}
-	if c.Status != domain.StatusConfirmed {
+	if c.Status != domain.StatusConfirmed && c.Status != domain.StatusSuspected {
 		return domain.Wrap(domain.ErrUsage,
 			"%s is a partial capsule (%s); no verified witness to re-run", c.ID, c.Status)
+	}
+	if c.Witness.CrossBinary {
+		return replayCross(ctx, c, pkgArg, storeDir, n, polluterArg, out)
 	}
 	if n <= 0 {
 		return domain.Wrap(domain.ErrUsage, "-n must be positive")
@@ -104,8 +104,22 @@ func replayCmd(ctx context.Context, args []string, out IO) error {
 		}
 	}
 
+	if c.Witness.CrossClause {
+		spec.RunRegex = domain.SelectionRegex(c.Witness)
+		spec.ShuffleSeed = c.Witness.Seed
+	}
 	runner := &gotest.Exec{}
 	outcome := func() (bool, error) {
+		if c.Witness.CrossClause {
+			res, err := runner.Run(ctx, spec)
+			if err != nil {
+				return false, err
+			}
+			if res.BuildFailed {
+				return false, buildFailure(pkgDir, res)
+			}
+			return res.Failed(c.Witness.Victim.Name), nil
+		}
 		switch c.Kind {
 		case domain.KindEnv, domain.KindRepeat:
 			res, err := runner.Run(ctx, spec)
@@ -314,6 +328,11 @@ func replayCross(ctx context.Context, c domain.Capsule, pkgArg, storeDir string,
 		return domain.Wrap(domain.ErrUsage, "cross-binary capsule carries no polluter steps")
 	}
 
+	ctx, unlock, err := policy.LockedDirs(ctx, polluterDir, victimDir)
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	runner := &gotest.Exec{}
 	var failed int
 	for i := 0; i < n; i++ {
@@ -331,6 +350,9 @@ func replayCross(ctx context.Context, c domain.Capsule, pkgArg, storeDir string,
 		}
 		if res1.BuildFailed {
 			return domain.Wrap(domain.ErrBuildFailed, "polluter package %s does not build", polluterDir)
+		}
+		if res1.ExitCode != 0 {
+			return domain.Wrap(domain.ErrNotReproduced, "polluter stage failed; victim stage was not run")
 		}
 		res2, err := runner.Run(ctx, domain.RunSpec{
 			Package:  victimDir,

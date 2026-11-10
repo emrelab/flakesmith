@@ -187,3 +187,28 @@ func TestReadRejectsUnknownKind(t *testing.T) {
 		t.Errorf("a partial capsule has no class by design: %v", err)
 	}
 }
+
+func TestWitnessConfidenceAndSelectionIdentity(t *testing.T) {
+	w := witness()
+	confirmed := capsule.ID(w, "m", "commit")
+	fingerprint := capsule.Fingerprint(w, "m")
+	o := domain.Observe(3, 2)
+	w.Verification = &o
+	if capsule.ID(w, "m", "commit") == confirmed {
+		t.Fatal("suspected capsule would overwrite confirmed capsule")
+	}
+	w.Verification = nil
+	w.CrossClause = true
+	w.Seed = 21
+	if capsule.ID(w, "m", "commit") == confirmed {
+		t.Fatal("top-level selection collides with generated witness")
+	}
+	if capsule.Fingerprint(w, "m") != fingerprint {
+		t.Fatal("selection mechanics changed the known defect")
+	}
+	previous := capsule.ID(w, "m", "commit")
+	w.Seed = 34
+	if capsule.ID(w, "m", "commit") == previous {
+		t.Fatal("reproduction seed missing from capsule identity")
+	}
+}

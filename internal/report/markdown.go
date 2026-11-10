@@ -21,7 +21,11 @@ func Markdown(w io.Writer, c domain.Capsule) error {
 	if c.Status != domain.StatusConfirmed {
 		title = fmt.Sprintf("%s (%s)", title, c.Status)
 	}
-	fmt.Fprintf(&b, "### flake: %s\n\n", title)
+	label := "flake"
+	if c.Status == domain.StatusSuspected {
+		label = "suspected flake"
+	}
+	fmt.Fprintf(&b, "### %s: %s\n\n", label, title)
 
 	b.WriteString("| field | value |\n|---|---|\n")
 	row := func(k, val string) {
@@ -45,6 +49,10 @@ func Markdown(w io.Writer, c domain.Capsule) error {
 	if c.Observation.Runs > 0 {
 		row("run", fmt.Sprintf("%d/%d failed", c.Observation.Failures, c.Observation.Runs))
 	}
+	if ci := c.Observation.Wilson95; ci != nil {
+		row("Wilson 95%", fmt.Sprintf("%.1f%%–%.1f%%", ci.Lower*100, ci.Upper*100))
+	}
+	row("external dependencies (static)", strings.Join(c.Evidence.ExternalDependencies, "; "))
 	row("evidence", sharedGlobalLine(c))
 	if len(c.Evidence.FilesTouched) > 0 {
 		row("disk writes", strings.Join(c.Evidence.FilesTouched, "; "))

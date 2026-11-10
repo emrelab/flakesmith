@@ -32,16 +32,20 @@ func Minimize(ctx context.Context, candidates []domain.TestID, pred Predicate, v
 		return nil, err
 	}
 
+	failures, firstMiss := 0, 0
 	for i := 0; i < verify; i++ {
-		ok, err := pred(ctx, min)
+		ok, err := pred(domain.FreshRuns(ctx), min)
 		if err != nil {
 			return nil, err
 		}
-		if !ok {
-			// The set found did not reproduce: not deterministic.
-			return nil, fmt.Errorf("%w: verification %d/%d failed after shrinking",
-				domain.ErrNotReproducible, i+1, verify)
+		if ok {
+			failures++
+		} else if firstMiss == 0 {
+			firstMiss = i + 1
 		}
+	}
+	if failures != verify {
+		return min, &VerificationError{Observation: domain.Observe(verify, failures), FirstMiss: firstMiss}
 	}
 	return min, nil
 }
@@ -141,3 +145,14 @@ func min(a, b int) int {
 	}
 	return b
 }
+
+// VerificationError retains observations without weakening the strict confirmation gate.
+type VerificationError struct {
+	Observation domain.Observation
+	FirstMiss   int
+}
+
+func (e *VerificationError) Error() string {
+	return fmt.Sprintf("%s: verification %d/%d failed after shrinking (%d/%d reproduced)", domain.ErrNotReproducible, e.FirstMiss, e.Observation.Runs, e.Observation.Failures, e.Observation.Runs)
+}
+func (e *VerificationError) Unwrap() error { return domain.ErrNotReproducible }

@@ -3,6 +3,7 @@ package probe_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -13,11 +14,8 @@ import (
 	"github.com/emrelab/flakesmith/internal/probe"
 )
 
-// A witness may only call tests from the victim's own test binary. When every
-// sibling that ran before the victim belongs to the other clause there is no
-// witness to build at all — the probe must say so instead of reporting
-// "no flake", which would claim knowledge it does not have.
-func TestOrderReportsCrossClauseInsteadOfNoFlake(t *testing.T) {
+// Cross-clause tests share one binary and are replayed by top-level selection.
+func TestOrderReproducesCrossClauseSelection(t *testing.T) {
 	tgt := probe.Target{
 		Test: domain.TestID{Package: "p", Name: "TestVictim"},
 		Dir:  t.TempDir(),
@@ -40,23 +38,22 @@ func TestOrderReportsCrossClauseInsteadOfNoFlake(t *testing.T) {
 		return res, nil
 	}}
 
-	_, err := probe.Order{Seeds: []int64{1}}.Probe(context.Background(), tgt, fake)
-	if !errors.Is(err, domain.ErrUnsupportedTest) {
-		t.Fatalf("expected ErrUnsupportedTest, got %v", err)
+	w, err := probe.Order{Seeds: []int64{1}}.Probe(context.Background(), tgt, fake)
+	if err != nil || w == nil || !w.CrossClause || w.CrossBinary || w.Func != "" {
+		t.Fatalf("cross-clause witness = %+v, %v", w, err)
 	}
-	// The message must name both clauses: "unsupported" alone does not tell
-	// the user which test in which package defeated the tool.
-	for _, want := range []string{"TestInnerPolluter", "package p", "p_test"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("error message missing %q: %v", want, err)
+	for _, run := range fake.Runs() {
+		if strings.Contains(run.RunRegex, "TestFlakeWitness") {
+			t.Fatal("cross-clause witness used a generated chain")
 		}
 	}
+
 }
 
 // Same-clause candidates exist but none reproduces the failure, and the
 // package does contain tests from the other clause: the missing ingredient is
-// across the binary boundary. That is unsupported, not "clean".
-func TestOrderReportsCrossClauseWhenSameClauseFailsToReproduce(t *testing.T) {
+// across the visibility boundary. Top-level selection still reproduces it.
+func TestOrderFallsBackToCrossClauseSelection(t *testing.T) {
 	tgt := probe.Target{
 		Test: domain.TestID{Package: "p", Name: "TestVictim"},
 		Dir:  t.TempDir(),
@@ -85,10 +82,11 @@ func TestOrderReportsCrossClauseWhenSameClauseFailsToReproduce(t *testing.T) {
 		}
 	}}
 
-	_, err := probe.Order{Seeds: []int64{1}}.Probe(context.Background(), tgt, fake)
-	if !errors.Is(err, domain.ErrUnsupportedTest) {
-		t.Fatalf("expected ErrUnsupportedTest, got %v", err)
+	w, err := probe.Order{Seeds: []int64{1}}.Probe(context.Background(), tgt, fake)
+	if err != nil || w == nil || !w.CrossClause {
+		t.Fatalf("cross-clause fallback = %+v, %v", w, err)
 	}
+
 }
 
 // Single-clause packages must behave unchanged: the same-clause polluter is found.
@@ -171,5 +169,71 @@ func TestOrderCancelLeavesNoWitnessFile(t *testing.T) {
 	leftovers, _ := filepath.Glob(filepath.Join(dir, "zz_flakesmith_witness_*"))
 	if len(leftovers) > 0 {
 		t.Errorf("witness files left behind: %v", leftovers)
+	}
+}
+
+func TestOrderRetainsPartialVerificationAsSuspected(t *testing.T) {
+	for _, failures := range []int{0, 2, 3} {
+		t.Run(fmt.Sprint(failures), func(t *testing.T) {
+			rounds := 0
+			tgt := probe.Target{Dir: t.TempDir(), Test: domain.TestID{Package: "p", Name: "TestVictim"}, Facts: facts.PkgFacts{Clause: map[string]string{"TestVictim": "p", "TestPolluter": "p"}}}
+			fake := &gotest.Fake{RunFn: func(s domain.RunSpec) (*domain.RunResult, error) {
+				if s.RunRegex == "^TestVictim$" {
+					return gotest.Result(s, map[string]domain.Status{"TestVictim": domain.StatusPass}), nil
+				}
+				if strings.Contains(s.RunRegex, "TestFlakeWitness") {
+					rounds++
+					name := strings.Trim(s.RunRegex, "^$")
+					status := domain.StatusPass
+					if rounds <= failures {
+						status = domain.StatusFail
+					}
+					return gotest.Result(s, map[string]domain.Status{domain.WitnessSubtest(name, "TestVictim"): status}), nil
+				}
+				res := gotest.Result(s, map[string]domain.Status{"TestVictim": domain.StatusFail})
+				res.Order = []string{"TestPolluter", "TestVictim"}
+				return res, nil
+			}}
+			w, err := probe.Order{Verify: 3}.Probe(context.Background(), tgt, fake)
+			if rounds != 3 {
+				t.Fatalf("verification stopped early: %d", rounds)
+			}
+			switch failures {
+			case 0:
+				if w != nil || !errors.Is(err, domain.ErrNotReproducible) {
+					t.Fatalf("zero reproduction retained: %+v %v", w, err)
+				}
+			case 2:
+				if w == nil || w.Verification == nil || w.Verification.Failures != 2 || !errors.Is(err, domain.ErrNotReproducible) {
+					t.Fatalf("partial=%+v %v", w, err)
+				}
+			case 3:
+				if w == nil || w.Verification != nil || err != nil {
+					t.Fatalf("confirmed=%+v %v", w, err)
+				}
+			}
+		})
+	}
+}
+
+func TestCrossClauseKeepsObservedShuffleSeed(t *testing.T) {
+	tgt := probe.Target{Dir: t.TempDir(), Test: domain.TestID{Name: "TestVictim"}, Facts: facts.PkgFacts{Clause: map[string]string{"TestVictim": "p_test", "TestPolluter": "p"}}}
+	fake := &gotest.Fake{RunFn: func(s domain.RunSpec) (*domain.RunResult, error) {
+		status := domain.StatusPass
+		if s.ShuffleSeed == 21 {
+			status = domain.StatusFail
+		}
+		res := gotest.Result(s, map[string]domain.Status{"TestVictim": status})
+		res.Order = []string{"TestPolluter", "TestVictim"}
+		return res, nil
+	}}
+	w, err := probe.Order{Seeds: []int64{21}}.Probe(context.Background(), tgt, fake)
+	if err != nil || w == nil || !w.CrossClause || w.Seed != 21 {
+		t.Fatalf("seeded witness=%+v %v", w, err)
+	}
+	for _, s := range fake.Runs() {
+		if s.RunRegex != "" && s.ShuffleSeed != 21 {
+			t.Fatalf("selected replay lost seed: %+v", s)
+		}
 	}
 }

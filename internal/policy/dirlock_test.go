@@ -104,3 +104,38 @@ func TestReleaseIsIdempotent(t *testing.T) {
 	release()
 	release() // must not panic
 }
+
+func TestLockedDirsRetainsBothTokensAndAvoidsReverseDeadlock(t *testing.T) {
+	a, b := t.TempDir(), t.TempDir()
+	ctx, release, err := policy.LockedDirs(context.Background(), b, a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !policy.Held(ctx, a) || !policy.Held(ctx, b) {
+		release()
+		t.Fatal("nested lock lost ownership of one directory")
+	}
+	nested, unlock, err := policy.Locked(ctx, a)
+	if err != nil || !policy.Held(nested, b) {
+		release()
+		t.Fatalf("reentrant lock err=%v", err)
+	}
+	unlock()
+	release()
+	var wg sync.WaitGroup
+	deadline, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	for _, dirs := range [][]string{{a, b}, {b, a}} {
+		wg.Add(1)
+		go func(ds []string) {
+			defer wg.Done()
+			_, u, e := policy.LockedDirs(deadline, ds...)
+			if e != nil {
+				t.Error(e)
+				return
+			}
+			u()
+		}(dirs)
+	}
+	wg.Wait()
+}

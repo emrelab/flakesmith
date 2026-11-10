@@ -176,3 +176,24 @@ func TestExplainRerendersCapsule(t *testing.T) {
 		t.Errorf("explain must not run anything, left witness files: %v", leftovers)
 	}
 }
+
+func TestInitAddsRecordedCapsuleGate(t *testing.T) {
+	dir := t.TempDir()
+	code, _, errs := clitest.Run("init", dir, "--replay-capsule", ".flakesmith/fs_123.json")
+	if code != 0 {
+		t.Fatalf("init %d %s", code, errs)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, ".github/workflows/flakesmith.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"guard recorded flake", "replay '.flakesmith/fs_123.json' -n 3", "3) echo", `*) exit "$status"`} {
+		if !strings.Contains(string(data), want) {
+			t.Fatalf("missing %q: %s", want, data)
+		}
+	}
+	code, _, _ = clitest.Run("init", t.TempDir(), "--replay-capsule", "../outside.json")
+	if code != domain.ExitUsage {
+		t.Fatalf("nonportable capsule accepted: %d", code)
+	}
+}

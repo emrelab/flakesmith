@@ -94,3 +94,22 @@ func TestCacheDistinguishesWitnessSource(t *testing.T) {
 		t.Fatalf("the same witness must come from cache, ran %d", fake.CallCount())
 	}
 }
+
+func TestIndependentVerificationBypassesCachedPass(t *testing.T) {
+	fake := &gotest.Fake{RunFn: func(s domain.RunSpec) (*domain.RunResult, error) {
+		return gotest.Result(s, map[string]domain.Status{"TestA": domain.StatusPass}), nil
+	}}
+	c := gotest.NewCache(fake, 0)
+	spec := domain.RunSpec{Package: "p", Count: 1}
+	if _, err := c.Run(context.Background(), spec); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 3; i++ {
+		if _, err := c.Run(domain.FreshRuns(context.Background()), spec); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if fake.CallCount() != 4 {
+		t.Fatalf("verification reused a pass: %d executions", fake.CallCount())
+	}
+}

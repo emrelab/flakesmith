@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 )
 
@@ -28,7 +29,10 @@ import (
 
 type lockTokenKey struct{}
 
-type lockToken struct{ key string }
+type lockToken struct {
+	key    string
+	parent *lockToken
+}
 
 // mu guards the entry map; never held across an OS lock wait.
 var (
@@ -73,7 +77,7 @@ func Locked(ctx context.Context, dir string) (context.Context, func(), error) {
 	key := canonical(dir)
 
 	// Already held by this call chain: nothing to do.
-	if tok, ok := ctx.Value(lockTokenKey{}).(lockToken); ok && tok.key == key {
+	if Held(ctx, key) {
 		return ctx, func() {}, nil
 	}
 
@@ -131,13 +135,24 @@ func Locked(ctx context.Context, dir string) (context.Context, func(), error) {
 		})
 	}
 
-	return context.WithValue(ctx, lockTokenKey{}, lockToken{key: key}), release, nil
+	parent, _ := ctx.Value(lockTokenKey{}).(lockToken)
+	return context.WithValue(ctx, lockTokenKey{}, lockToken{key: key, parent: &parent}), release, nil
 }
 
 // Held reports whether ctx already carries dir's lock.
 func Held(ctx context.Context, dir string) bool {
 	tok, ok := ctx.Value(lockTokenKey{}).(lockToken)
-	return ok && tok.key == canonical(dir)
+	key := canonical(dir)
+	for ok {
+		if tok.key == key {
+			return true
+		}
+		if tok.parent == nil {
+			break
+		}
+		tok = *tok.parent
+	}
+	return false
 }
 
 func canonical(dir string) string {
@@ -154,4 +169,35 @@ func canonical(dir string) string {
 func lockPath(key string) string {
 	sum := sha256.Sum256([]byte(key))
 	return filepath.Join(os.TempDir(), "flakesmith-locks", hex.EncodeToString(sum[:16])+".lock")
+}
+
+// LockedDirs acquires a sequence's directories in canonical order to prevent
+// opposite-direction cross-package runs from deadlocking or interleaving.
+func LockedDirs(ctx context.Context, dirs ...string) (context.Context, func(), error) {
+	keys := make([]string, 0, len(dirs))
+	seen := map[string]bool{}
+	for _, d := range dirs {
+		k := canonical(d)
+		if !seen[k] {
+			seen[k] = true
+			keys = append(keys, k)
+		}
+	}
+	sort.Strings(keys)
+	var releases []func()
+	release := func() {
+		for i := len(releases) - 1; i >= 0; i-- {
+			releases[i]()
+		}
+	}
+	for _, k := range keys {
+		next, unlock, err := Locked(ctx, k)
+		if err != nil {
+			release()
+			return ctx, func() {}, err
+		}
+		ctx = next
+		releases = append(releases, unlock)
+	}
+	return ctx, release, nil
 }

@@ -78,7 +78,7 @@ func (p Repeat) Probe(ctx context.Context, tgt Target, r gotest.Runner) (*domain
 	}
 
 	// Confirm determinism: a single failing round can be noise.
-	again, err := r.Run(ctx, domain.RunSpec{
+	again, err := r.Run(domain.FreshRuns(ctx), domain.RunSpec{
 		Package:  tgt.Dir,
 		RunRegex: regex,
 		Count:    count,

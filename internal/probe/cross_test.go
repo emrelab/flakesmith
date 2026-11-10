@@ -172,3 +172,20 @@ func TestRegistryRefusalSurvivesWhenNothingReproduces(t *testing.T) {
 		t.Fatalf("err = %v, want the refusal back (exit 5), not \"no flake\"", err)
 	}
 }
+
+func TestOrderCrossDoesNotRunVictimAfterFailedPolluter(t *testing.T) {
+	victims := 0
+	fake := &gotest.Fake{DiscoverFn: func(string) ([]domain.TestID, error) { return []domain.TestID{{Name: "TestBad"}}, nil }, RunFn: func(s domain.RunSpec) (*domain.RunResult, error) {
+		if s.Package == crossVictimDir {
+			victims++
+			return gotest.Result(s, map[string]domain.Status{"TestVictim": domain.StatusPass}), nil
+		}
+		res := gotest.Result(s, map[string]domain.Status{"TestBad": domain.StatusFail})
+		res.ExitCode = 1
+		return res, nil
+	}}
+	w, err := probe.OrderCross{PolluterDir: crossPolluterDir}.Probe(context.Background(), crossTarget(), fake)
+	if !errors.Is(err, probe.ErrNotReproduced) || w != nil || victims != 1 {
+		t.Fatalf("w=%+v err=%v victim executions=%d", w, err, victims)
+	}
+}

@@ -345,3 +345,36 @@ func TestScanRecordsTestPositions(t *testing.T) {
 		t.Error("declaration order must survive into the line numbers")
 	}
 }
+
+func TestScanNamesExternalDependenciesWithoutArguments(t *testing.T) {
+	dir := t.TempDir()
+	src := `package p
+ import (clock "time"; web "net/http"; "database/sql"; "math/rand")
+ func helper(){ clock.Now(); web.Get("https://secret.example/token"); sql.Open("driver","secret-password"); rand.Intn(4) }
+ `
+	if err := os.WriteFile(filepath.Join(dir, "app.go"), []byte(src), 0600); err != nil {
+		t.Fatal(err)
+	}
+	f, err := facts.Scan(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"clock/timing: time.Now", "database: database/sql.Open", "network: net/http.Get", "randomness: math/rand.Intn"}
+	if !reflect.DeepEqual(f.ExternalDependencies, want) {
+		t.Fatalf("got %q", f.ExternalDependencies)
+	}
+}
+
+func TestApplicationGlobalEvidenceMatrix(t *testing.T) {
+	for _, shape := range []string{"direct-read", "direct-write", "method-write"} {
+		t.Run(shape, func(t *testing.T) {
+			f, err := facts.Scan(filepath.Join(fixture(t, "app-globals"), shape))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(f.GlobalsWritten) != 0 || len(f.GlobalsRead) != 0 {
+				t.Fatalf("default evidence scope unexpectedly widened: %+v %+v", f.GlobalsWritten, f.GlobalsRead)
+			}
+		})
+	}
+}

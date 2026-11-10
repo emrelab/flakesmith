@@ -48,6 +48,13 @@ func compileCmd(ctx context.Context, args []string, out IO) error {
 		return domain.Wrap(domain.ErrUsage, "%s", err)
 	}
 
+	if c.Status != domain.StatusConfirmed {
+		return domain.Wrap(domain.ErrUnsupportedTest, "only confirmed capsules can be compiled; %s is %s", c.ID, c.Status)
+	}
+	if c.Witness.CrossClause {
+		return domain.Wrap(domain.ErrUnsupportedTest, "tests in different package clauses cannot be called from one generated file; reproduce with: %s", c.Repro.Command)
+	}
+
 	// A cross-binary witness (#6) cannot become a single regression test file:
 	// its reproduction is two `go test` processes. Refusing with the command
 	// attached turns the exit 5 into a copy-pasteable action instead of a dead

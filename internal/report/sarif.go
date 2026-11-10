@@ -73,7 +73,11 @@ func sarifForResult(c domain.Capsule) sarifResult {
 	v := c.Witness
 	var b strings.Builder
 	b.WriteString(c.Target.Victim)
-	b.WriteString(" is flaky (class: ")
+	if c.Status == domain.StatusSuspected {
+		b.WriteString(" is suspected flaky (class: ")
+	} else {
+		b.WriteString(" is flaky (class: ")
+	}
 	b.WriteString(string(c.Kind))
 	b.WriteString(")")
 	if len(v.Polluters) > 0 {
@@ -98,6 +102,11 @@ func sarifForResult(c domain.Capsule) sarifResult {
 		RuleID:  "flakesmith/" + string(c.Kind),
 		Level:   "warning",
 		Message: sarifText{b.String()},
+	}
+	if c.Status == domain.StatusSuspected {
+		r.Level = "note"
+		r.Kind = "review"
+		r.Properties = map[string]any{"status": c.Status, "observation": c.Observation}
 	}
 	if c.Target.VictimFile != "" && c.Target.VictimLine > 0 {
 		// RelDir is the path as the user invoked it (repo-root-relative in CI);
@@ -145,10 +154,12 @@ type sarifRule struct {
 }
 
 type sarifResult struct {
-	RuleID    string          `json:"ruleId"`
-	Level     string          `json:"level"`
-	Message   sarifText       `json:"message"`
-	Locations []sarifLocation `json:"locations,omitempty"`
+	Properties map[string]any  `json:"properties,omitempty"`
+	Kind       string          `json:"kind,omitempty"`
+	RuleID     string          `json:"ruleId"`
+	Level      string          `json:"level"`
+	Message    sarifText       `json:"message"`
+	Locations  []sarifLocation `json:"locations,omitempty"`
 }
 
 type sarifLocation struct {

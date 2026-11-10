@@ -191,3 +191,65 @@ func TestHuntCrossBinaryNeedsSuspect(t *testing.T) {
 		t.Fatalf("a scan that finds nothing is exit 0, got %d", code)
 	}
 }
+
+func TestCrossClauseSharedMemoryLifecycle(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration")
+	}
+	dir := clitest.FixtureDir(t, "clause-mismatch")
+	store := t.TempDir()
+	code, out, errs := clitest.Run("repro", dir, "TestOuterVictim", "--capsule-dir", store, "--budget", "150")
+	if code != 0 {
+		t.Fatalf("repro %d %s %s", code, out, errs)
+	}
+	ids, err := capsule.NewStore(store).List()
+	if err != nil || len(ids) != 1 {
+		t.Fatalf("ids=%v %v", ids, err)
+	}
+	c, err := capsule.NewStore(store).Read(ids[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !c.Witness.CrossClause || c.Witness.CrossBinary || c.Status != domain.StatusConfirmed || strings.Contains(c.Repro.Command, "&&") {
+		t.Fatalf("capsule=%+v", c)
+	}
+	code, out, errs = clitest.Run("replay", ids[0], "--pkg", dir, "--capsule-dir", store, "-n", "3")
+	if code != 0 || !strings.Contains(out, "3/3") {
+		t.Fatalf("replay %d %s %s", code, out, errs)
+	}
+	code, _, errs = clitest.Run("compile", ids[0], "--pkg", dir, "--capsule-dir", store)
+	if code != domain.ExitUnsupported || !strings.Contains(errs, "go test") {
+		t.Fatalf("compile %d %s", code, errs)
+	}
+}
+
+func TestApplicationGlobalsWitnessRecallMatrix(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration")
+	}
+	root := clitest.FixtureDir(t, "app-globals")
+	for _, shape := range []string{"direct-read", "direct-write", "method-write"} {
+		t.Run(shape, func(t *testing.T) {
+			store := t.TempDir()
+			dir := filepath.Join(root, shape)
+			code, out, errs := clitest.Run("repro", dir, "TestVictim", "--capsule-dir", store, "--budget", "100")
+			if code != 0 {
+				t.Fatalf("repro %d %s %s", code, out, errs)
+			}
+			ids, err := capsule.NewStore(store).List()
+			if err != nil || len(ids) != 1 {
+				t.Fatalf("capsules=%v %v", ids, err)
+			}
+			c, err := capsule.NewStore(store).Read(ids[0])
+			if err != nil {
+				t.Fatal(err)
+			}
+			if c.Status != domain.StatusConfirmed || len(c.Witness.Polluters) != 1 || c.Witness.Polluters[0].Name != "TestPolluter" {
+				t.Fatalf("witness=%+v", c)
+			}
+			if len(c.Evidence.GlobalsWritten) != 0 || len(c.Evidence.GlobalsRead) != 0 {
+				t.Fatalf("unexpected evidence=%+v", c.Evidence)
+			}
+		})
+	}
+}

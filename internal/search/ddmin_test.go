@@ -134,3 +134,23 @@ func TestMinimizeRespectsContext(t *testing.T) {
 		t.Fatalf("expected context.Canceled, got %v", err)
 	}
 }
+
+func TestMinimizeRecordsAllIndependentVerificationRounds(t *testing.T) {
+	rounds := 0
+	pred := func(ctx context.Context, _ []domain.TestID) (bool, error) {
+		if !domain.RequiresFreshRuns(ctx) {
+			return true, nil
+		}
+		rounds++
+		return rounds != 2, nil
+	}
+	min, err := search.Minimize(context.Background(), ids(1), pred, 3)
+	var uncertain *search.VerificationError
+	if !errors.As(err, &uncertain) || len(min) != 1 || rounds != 3 {
+		t.Fatalf("min=%v rounds=%d err=%v", min, rounds, err)
+	}
+	o := uncertain.Observation
+	if o.Failures != 2 || o.Runs != 3 || o.Deterministic || o.Wilson95 == nil || o.Wilson95.Lower <= 0 || o.Wilson95.Upper >= 1 {
+		t.Fatalf("observation=%+v", o)
+	}
+}

@@ -128,3 +128,16 @@ type sarifShape struct {
 		} `json:"results"`
 	} `json:"runs"`
 }
+
+func TestSuspectedSARIFIsReviewNote(t *testing.T) {
+	c := domain.Capsule{Status: domain.StatusSuspected, Kind: domain.KindParallel, Target: domain.Target{Victim: "TestTiming"}, Observation: domain.Observe(3, 2)}
+	var out strings.Builder
+	if err := report.SARIF(&out, []domain.Capsule{c}, "test"); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`"kind": "review"`, `"level": "note"`, `suspected flaky`} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("missing %s: %s", want, out.String())
+		}
+	}
+}

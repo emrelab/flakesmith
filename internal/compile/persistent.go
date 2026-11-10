@@ -142,6 +142,9 @@ type Options struct {
 
 // Render returns the gofmt-clean source of the permanent regression test.
 func Render(c domain.Capsule, clause string) ([]byte, error) {
+	if c.Witness.CrossClause || (c.Status != "" && c.Status != domain.StatusConfirmed) {
+		return nil, domain.Wrap(domain.ErrUnsupportedTest, "only confirmed single-clause witnesses can be compiled")
+	}
 	if clause == "" {
 		return nil, fmt.Errorf("%w: unknown package clause", domain.ErrInternal)
 	}

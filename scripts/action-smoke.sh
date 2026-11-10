@@ -67,7 +67,7 @@ run_hunt_step() {
   status=${PIPESTATUS[0]}
 
   case "$FS_FORMAT" in
-    json) count=$(grep -c '"id":' "$report" || true) ;;
+    json) count=$(grep -c '"status": "confirmed"' "$report" || true) ;;
     *)    count=$(grep -Ec '^(### flake:|flake found:)' "$report" || true) ;;
   esac
   echo "flakes=${count:-0}" >> "$GITHUB_OUTPUT"

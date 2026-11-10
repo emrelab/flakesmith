@@ -1,6 +1,9 @@
 package domain
 
-import "time"
+import (
+	"math"
+	"time"
+)
 
 // SchemaVersion is the version of the capsule JSON schema.
 // It is increased on breaking changes; old capsules remain readable.
@@ -12,6 +15,8 @@ type CapsuleStatus string
 const (
 	// StatusConfirmed reproduced deterministically.
 	StatusConfirmed CapsuleStatus = "confirmed"
+	// StatusSuspected reproduced in only some independent verification rounds.
+	StatusSuspected CapsuleStatus = "suspected"
 	// StatusPartial the budget ran out; what was tried is reported.
 	StatusPartial CapsuleStatus = "partial"
 	// StatusProbabilistic there is an external dependency; determinism is not guaranteed.
@@ -72,21 +77,23 @@ type Target struct {
 
 // Observation is how often it failed across how many runs.
 type Observation struct {
-	Runs          int     `json:"runs"`
-	Failures      int     `json:"failures"`
-	Deterministic bool    `json:"deterministic"`
-	Rate          float64 `json:"failureRate"`
+	Runs          int                 `json:"runs"`
+	Failures      int                 `json:"failures"`
+	Deterministic bool                `json:"deterministic"`
+	Rate          float64             `json:"failureRate"`
+	Wilson95      *ConfidenceInterval `json:"wilson95,omitempty"`
 }
 
 // Evidence records observations; it is not a "root cause".
 type Evidence struct {
-	GlobalsWritten map[string][]string `json:"globalsWritten,omitempty"`
-	GlobalsRead    map[string][]string `json:"globalsRead,omitempty"`
-	EnvDiff        []string            `json:"envDiff,omitempty"`
-	FilesTouched   []string            `json:"filesTouched,omitempty"`
-	Ports          []string            `json:"ports,omitempty"`
-	Race           *string             `json:"race,omitempty"`
-	GoroutineTop   []string            `json:"goroutineTop,omitempty"`
+	ExternalDependencies []string            `json:"externalDependencies,omitempty"`
+	GlobalsWritten       map[string][]string `json:"globalsWritten,omitempty"`
+	GlobalsRead          map[string][]string `json:"globalsRead,omitempty"`
+	EnvDiff              []string            `json:"envDiff,omitempty"`
+	FilesTouched         []string            `json:"filesTouched,omitempty"`
+	Ports                []string            `json:"ports,omitempty"`
+	Race                 *string             `json:"race,omitempty"`
+	GoroutineTop         []string            `json:"goroutineTop,omitempty"`
 }
 
 // Repro is how to reproduce the failure.
@@ -119,4 +126,24 @@ type Capsule struct {
 	// race run"). Confirmed capsules with full evidence leave it empty.
 	// Additive field: old readers ignore it, the schema version does not change.
 	Note string `json:"note,omitempty"`
+}
+
+// ConfidenceInterval is a two-sided 95% Wilson score interval for the observed rate.
+type ConfidenceInterval struct {
+	Lower float64 `json:"lower"`
+	Upper float64 `json:"upper"`
+}
+
+// Observe summarizes completed independent trials without treating a small sample as certainty.
+func Observe(runs, failures int) Observation {
+	if runs <= 0 || failures < 0 || failures > runs {
+		return Observation{}
+	}
+	n := float64(runs)
+	p := float64(failures) / n
+	z := 1.959963984540054
+	d := 1 + z*z/n
+	center := (p + z*z/(2*n)) / d
+	half := z * math.Sqrt(p*(1-p)/n+z*z/(4*n*n)) / d
+	return Observation{Runs: runs, Failures: failures, Rate: p, Deterministic: failures == runs, Wilson95: &ConfidenceInterval{Lower: math.Max(0, center-half), Upper: math.Min(1, center+half)}}
 }

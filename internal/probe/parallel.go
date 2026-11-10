@@ -119,7 +119,10 @@ func (p Parallel) Probe(ctx context.Context, tgt Target, r gotest.Runner) (*doma
 
 	pred := p.predicate(tgt, r, clause, fn)
 	min, err := search.Minimize(ctx, same, pred, verify)
-	if err != nil {
+	var uncertain *search.VerificationError
+	if errors.As(err, &uncertain) && uncertain.Observation.Failures > 0 {
+		// Keep the candidate as suspected, while the registry may still find a confirmed explanation.
+	} else if err != nil {
 		// Same-clause candidates do not explain the overlap while the other
 		// clause does: the missing polluter is on the other side of the clause
 		// boundary. Report it instead of the generic "not reproducible".
@@ -144,7 +147,7 @@ func (p Parallel) Probe(ctx context.Context, tgt Target, r gotest.Runner) (*doma
 		WrapParallel: needsParallelWrap(tgt, tgt.Test.Name),
 	})
 
-	return &domain.Witness{
+	w := &domain.Witness{
 		Kind:      domain.KindParallel,
 		Victim:    tgt.Test,
 		Polluters: min,
@@ -155,7 +158,12 @@ func (p Parallel) Probe(ctx context.Context, tgt Target, r gotest.Runner) (*doma
 		Runs:  verify,
 		// Same reason as the order probe: replay reinstalls this file by name.
 		Func: fn,
-	}, nil
+	}
+	if uncertain != nil {
+		w.Verification = &uncertain.Observation
+		return w, uncertain
+	}
+	return w, nil
 }
 
 // predicate builds "install a parallel witness of subset + victim, run it with

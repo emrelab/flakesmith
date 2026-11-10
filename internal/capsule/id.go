@@ -24,6 +24,12 @@ func ID(w domain.Witness, module, commit string) string {
 		w.Victim.Name,
 		string(w.Kind),
 	}
+	if w.CrossClause {
+		parts = append(parts, fmt.Sprintf("cross-clause/seed=%d", w.Seed))
+	}
+	if w.Verification != nil {
+		parts = append(parts, "suspected")
+	}
 	polluters := make([]string, len(w.Polluters))
 	for i, p := range w.Polluters {
 		polluters[i] = p.Name
@@ -76,6 +82,9 @@ func PartialID(target domain.Target, status domain.CapsuleStatus, reason, module
 // Cross-process witnesses remain distinct from same-process witnesses.
 func Fingerprint(w domain.Witness, module string) string {
 	w.Flags = domain.Flags{}
+	w.CrossClause = false
+	w.Seed = 0
+	w.Verification = nil
 	scope := "same-process"
 	if w.CrossBinary {
 		scope = "cross-process"

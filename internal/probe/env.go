@@ -108,6 +108,7 @@ func (p Env) Probe(ctx context.Context, tgt Target, r gotest.Runner) (*domain.Wi
 // depends on the value", so the proof is that the two outcomes still differ.
 // A witness that reproduces sometimes is a lie once it is committed to a repo.
 func (p Env) verify(ctx context.Context, r gotest.Runner, base, variant domain.RunSpec, tgt Target, n int) error {
+	ctx = domain.FreshRuns(ctx)
 	for i := 0; i < n; i++ {
 		b, err := r.Run(ctx, base)
 		if err != nil {

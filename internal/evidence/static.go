@@ -22,7 +22,7 @@ import (
 // victim minding its own business. Including it would make every capsule look
 // like it found the same cause.
 func Build(w *domain.Witness, f facts.PkgFacts) domain.Evidence {
-	ev := domain.Evidence{EnvDiff: w.EnvDiff}
+	ev := domain.Evidence{EnvDiff: w.EnvDiff, ExternalDependencies: f.ExternalDependencies}
 	if len(w.Polluters) == 0 {
 		return ev
 	}

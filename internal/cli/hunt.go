@@ -259,9 +259,14 @@ func (s *scanner) pkg(ctx context.Context, pkgArg string) error {
 		return domain.Wrap(domain.ErrUsage, "could not read %s", pkgArg)
 	}
 
+	if len(pkgFacts.ExternalDependencies) > 0 {
+		fmt.Fprintf(s.out.Stderr, "%s: external dependencies (static, package-wide): %s; clock/network/database control is outside flakesmith; reproduction probes still run\n", pkgArg, strings.Join(pkgFacts.ExternalDependencies, "; "))
+	}
 	for _, t := range tests {
 		res, err := s.registry.Run(ctx, probe.Target{Test: t, Dir: dir, Facts: pkgFacts}, s.runner)
 		switch {
+		case errors.Is(err, domain.ErrNotReproducible) && res != nil && res.Suspected != nil:
+			res.Witness = res.Suspected
 		case errors.Is(err, probe.ErrNotReproduced):
 			// Always write: "no flake" alone hides the difference between
 			// "nothing is wrong" and "this probe cannot see this class".
@@ -283,7 +288,7 @@ func (s *scanner) pkg(ctx context.Context, pkgArg string) error {
 		// witness found here is tested once with -race. The evidence label then
 		// tells the truth — "scanned in race mode" would not be enough.
 		note := ""
-		if s.o.race {
+		if s.o.race && res.Witness.Verification == nil {
 			race, raceNote, rerr := probe.ConfirmRace(ctx,
 				probe.Target{Test: t, Dir: dir, Facts: pkgFacts}, res.Witness, s.runner)
 			if rerr != nil {
@@ -298,28 +303,33 @@ func (s *scanner) pkg(ctx context.Context, pkgArg string) error {
 
 		c := buildCapsule(res.Witness, dir, s.repoStateFor(ctx, dir), pkgFacts, relDir, s.polluterRel())
 		c.Note = note
+		if c.Status == domain.StatusSuspected {
+			c.Note = "partial reproduction; not confirmed and excluded from the CI flake gate and baseline"
+			c.Repro.Command = fmt.Sprintf("flakesmith replay %s --pkg %s --capsule-dir %s -n 10", c.ID, quoteArg(dir), quoteArg(capsuleDir(s.o.dir, dir)))
+		}
 		store := capsule.NewStore(capsuleDir(s.o.dir, dir))
 		path, err := store.Write(c)
 		if err != nil {
 			return err
 		}
-		s.found++
-		fingerprint := capsule.Fingerprint(c.Witness, c.Repo.Module)
-		s.ids = append(s.ids, fingerprint)
-		// A known flake is reported but not counted; silently swallowing it
-		// would let the user say "clean". stderr: in text mode stdout is the
-		// witness report, in json mode the one-document rule applies.
-		if len(s.baseline.IDs) > 0 {
-			if s.baseline.Contains(fingerprint) {
-				_, _ = fmt.Fprintf(s.out.Stderr, "known flake: %s (%s:%s)\n",
-					c.ID, c.Target.Package, c.Target.Victim)
+		if c.Status == domain.StatusConfirmed {
+			s.found++
+			fingerprint := capsule.Fingerprint(c.Witness, c.Repo.Module)
+			s.ids = append(s.ids, fingerprint)
+			// A known flake is reported but not counted; silently swallowing it
+			// would let the user say "clean". stderr: in text mode stdout is the
+			// witness report, in json mode the one-document rule applies.
+			if len(s.baseline.IDs) > 0 {
+				if s.baseline.Contains(fingerprint) {
+					_, _ = fmt.Fprintf(s.out.Stderr, "known flake: %s (%s:%s)\n",
+						c.ID, c.Target.Package, c.Target.Victim)
+				} else {
+					s.fresh++
+				}
 			} else {
 				s.fresh++
 			}
-		} else {
-			s.fresh++
 		}
-
 		if err := s.emit(c); err != nil {
 			return err
 		}
@@ -381,9 +391,11 @@ func filterTests(tests []domain.TestID, name string) []domain.TestID {
 // hunt scans one or more package directories and reports the flakes it finds.
 func hunt(ctx context.Context, args []string, out IO) error {
 	var o huntOptions
+	jobs := min(runtime.NumCPU(), 4)
 	fs := flag.NewFlagSet("hunt", flag.ContinueOnError)
 	fs.SetOutput(out.Stderr)
 	o.addFlags(fs)
+	fs.IntVar(&jobs, "jobs", jobs, "maximum packages scanned concurrently (shared total budget)")
 	// --changed is hunt-only: repro already targets one test, where a
 	// "changed packages" set has no meaning. Putting it in HuntOptions would
 	// ship a flag to both commands that repro never uses.
@@ -403,6 +415,12 @@ func hunt(ctx context.Context, args []string, out IO) error {
 		"write the ids found by this run to the baseline file (default .flakesmith/baseline.json)")
 	if err := parseFlags(fs, args); err != nil {
 		return err
+	}
+	if jobs < 1 {
+		return domain.Wrap(domain.ErrUsage, "--jobs must be positive")
+	}
+	if o.polluterPkg != "" {
+		jobs = 1
 	}
 	if err := o.resolvePolluter(ctx); err != nil {
 		return err
@@ -457,13 +475,7 @@ func hunt(ctx context.Context, args []string, out IO) error {
 		}
 	}
 
-	var runErr error
-	for _, dir := range dirs {
-		if err := s.pkg(ctx, dir); err != nil {
-			runErr = err
-			break
-		}
-	}
+	runErr := s.packages(ctx, dirs, jobs)
 	// JSON is one document: keep the findings of an interrupted run inside.
 	if err := s.flush(); err != nil {
 		return err
@@ -649,27 +661,32 @@ func buildCapsule(w *domain.Witness, dir string, st repoState, f facts.PkgFacts,
 	}
 	c.Kind = w.Kind
 	c.Witness = domain.Witness{
-		Kind:        w.Kind,
-		Victim:      w.Victim,
-		Polluters:   w.Polluters,
-		Flags:       w.Flags,
-		EnvDiff:     w.EnvDiff,
-		Runs:        w.Runs,
-		Func:        w.Func,
-		CrossBinary: w.CrossBinary,
+		Kind:         w.Kind,
+		Victim:       w.Victim,
+		Polluters:    w.Polluters,
+		Flags:        w.Flags,
+		EnvDiff:      w.EnvDiff,
+		Runs:         w.Runs,
+		Func:         w.Func,
+		CrossBinary:  w.CrossBinary,
+		CrossClause:  w.CrossClause,
+		Seed:         w.Seed,
+		Verification: w.Verification,
 	}
-	c.Observation = domain.Observation{
-		Runs:          w.Runs,
-		Failures:      w.Runs,
-		Deterministic: true,
-		Rate:          1.0,
-	}
+	c.Observation = domain.Observe(w.Runs, w.Runs)
 	c.Evidence = evidence.Build(w, f)
 	c.Status = domain.StatusConfirmed
+	if w.Verification != nil {
+		c.Status = domain.StatusSuspected
+		c.Observation = *w.Verification
+	}
 	c.Witness.Steps = stepsFor(w)
 	c.ID = capsule.ID(c.Witness, st.Module, st.Commit)
 	c.Repro.Command = reproCommand(c)
 	c.Repro.GeneratedTest = compile.OutputName(dir, targetSourceFile(dir, w.Victim.Name), w.Victim.Name)
+	if c.Status != domain.StatusConfirmed || w.CrossClause || w.CrossBinary {
+		c.Repro.GeneratedTest = ""
+	}
 	return c
 }
 
@@ -720,6 +737,14 @@ func reproCommand(c domain.Capsule) string {
 	dir := c.Target.RelDir
 	if dir == "" {
 		dir = "."
+	}
+
+	if c.Witness.CrossClause {
+		race := ""
+		if c.Witness.Flags.Race {
+			race = " -race"
+		}
+		return fmt.Sprintf("go test%s %s -run %s -count=1 -parallel=1 -shuffle=%s", race, quoteArg(dir), quoteArg(domain.SelectionRegex(c.Witness)), shuffleArgument(c.Witness.Seed))
 	}
 
 	// A cross-binary witness (#6) is not a test file, it is a sequence of two
@@ -892,3 +917,12 @@ func baselineMissing(path string) bool {
 	_, err := os.Stat(path)
 	return os.IsNotExist(err)
 }
+
+func shuffleArgument(seed int64) string {
+	if seed == 0 {
+		return "off"
+	}
+	return fmt.Sprint(seed)
+}
+
+func quoteArg(s string) string { return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'" }

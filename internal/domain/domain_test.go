@@ -131,4 +131,9 @@ func TestWitnessMinimal(t *testing.T) {
 	if !w.Minimal() {
 		t.Error("polluter + 2 runs should be minimal")
 	}
+	o := domain.Observe(3, 2)
+	w.Verification = &o
+	if w.Minimal() {
+		t.Error("suspected witness cannot claim verified minimality")
+	}
 }

@@ -8,6 +8,7 @@ import (
 	iofs "io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/emrelab/flakesmith/internal/domain"
 )
@@ -72,9 +73,22 @@ jobs:
 func initCmd(ctx context.Context, args []string, out IO) error {
 	fs := flag.NewFlagSet("init", flag.ContinueOnError)
 	fs.SetOutput(out.Stderr)
+	var replayCapsule string
+	fs.StringVar(&replayCapsule, "replay-capsule", "", "add a CI regression gate for a committed capsule JSON (repo-relative path)")
 	if err := parseFlags(fs, args); err != nil {
 		return err
 	}
+	if replayCapsule != "" {
+		if filepath.IsAbs(replayCapsule) || strings.HasPrefix(filepath.Clean(replayCapsule), "..") || !strings.HasSuffix(replayCapsule, ".json") {
+			return domain.Wrap(domain.ErrUsage, "--replay-capsule must be a repo-relative JSON path")
+		}
+		for _, r := range replayCapsule {
+			if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || strings.ContainsRune("./_-", r)) {
+				return domain.Wrap(domain.ErrUsage, "--replay-capsule path may contain only letters, digits, dot, slash, underscore and hyphen")
+			}
+		}
+	}
+
 	dir := "."
 	switch rest := fs.Args(); {
 	case len(rest) > 1:
@@ -94,11 +108,34 @@ func initCmd(ctx context.Context, args []string, out IO) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return domain.Wrap(domain.ErrInternal, "could not create directory: %v", err)
 	}
-	if err := os.WriteFile(path, []byte(workflowTemplate), 0o644); err != nil {
+	workflow := workflowTemplate
+	if replayCapsule != "" {
+		workflow = strings.Replace(workflow, "      - name: attach report", replayGate(replayCapsule)+"      - name: attach report", 1)
+	}
+	if err := os.WriteFile(path, []byte(workflow), 0o644); err != nil {
 		return domain.Wrap(domain.ErrInternal, "could not write %s: %v", path, err)
 	}
 
 	_, _ = fmt.Fprintf(out.Stdout, "written: %s\n", path)
 	_, _ = fmt.Fprintln(out.Stdout, "\nNext step: flakesmith hunt ./... (run it once locally, see the output)")
 	return nil
+}
+
+// replayGate preserves infrastructure errors while turning a reproduced
+// capsule RED and a non-reproducing (fixed) capsule GREEN. Replay reinstalls
+// the appropriate witness, including the two-process cross-binary sequence.
+func replayGate(path string) string {
+	return fmt.Sprintf(`      - name: guard recorded flake
+        run: |
+          set +e
+          GOBIN="$RUNNER_TEMP/flakesmith-bin" go install github.com/emrelab/flakesmith/cmd/flakesmith@latest || exit $?
+          "$RUNNER_TEMP/flakesmith-bin/flakesmith" replay %s -n 3
+          status=$?
+          case "$status" in
+            0) echo "Recorded flake reproduced"; exit 1 ;;
+            3) echo "Recorded flake no longer reproduces strictly"; exit 0 ;;
+            *) exit "$status" ;;
+          esac
+
+`, quoteArg(path))
 }

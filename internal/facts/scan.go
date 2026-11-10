@@ -182,6 +182,7 @@ func Scan(dir string) (PkgFacts, error) {
 	for k, vals := range f.EnvValues {
 		f.EnvValues[k] = dedupeSort(vals)
 	}
+	f.ExternalDependencies = externalDependencies(dir)
 	f.ImportPath = importPath(dir)
 	return f, nil
 }

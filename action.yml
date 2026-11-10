@@ -156,13 +156,10 @@ runs:
         flakesmith "${args[@]}" | tee "$report"
         status=${PIPESTATUS[0]}
 
-        # The counter depends on the format: json carries a "flakes" array in a
-        # single document, text and markdown print headings. A single grep
-        # pattern always returned 0 on json. The json pattern also pins the
-        # value prefix ("fs_"): a future field merely named "id" cannot inflate
-        # the count, and no external tool (jq) is needed on the runner.
+        # Count confirmed capsules only. Suspected and partial findings remain
+        # in the artifact but cannot inflate the confirmed flake output.
         case "$FS_FORMAT" in
-          json) count=$(grep -c '"id": "fs_' "$report" || true) ;;
+          json) count=$(grep -c '"status": "confirmed"' "$report" || true) ;;
           *)    count=$(grep -Ec '^(### flake:|flake found:)' "$report" || true) ;;
         esac
         echo "flakes=${count:-0}" >> "$GITHUB_OUTPUT"

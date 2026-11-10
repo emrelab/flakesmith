@@ -1,6 +1,9 @@
 package domain
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 // RunSpec is the full description of a "go test" invocation.
 // Same spec + same commit = same run.
@@ -68,3 +71,13 @@ func (r *RunResult) Failed(name string) bool { return r.Status(name) == StatusFa
 
 // Passed reports whether the test passed.
 func (r *RunResult) Passed(name string) bool { return r.Status(name) == StatusPass }
+
+type freshRunsKey struct{}
+
+// FreshRuns marks independent verification rounds; a result cache must bypass them.
+func FreshRuns(ctx context.Context) context.Context {
+	return context.WithValue(ctx, freshRunsKey{}, true)
+}
+
+// RequiresFreshRuns reports whether a caller needs a new observation.
+func RequiresFreshRuns(ctx context.Context) bool { v, _ := ctx.Value(freshRunsKey{}).(bool); return v }
