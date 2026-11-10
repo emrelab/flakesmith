@@ -1,0 +1,5 @@
+title: flakesmith
+description: Reproduce, shrink and permanently capture flaky Go tests.
+theme: jekyll-theme-primer
+markdown: kramdown
+exclude: [flakesmith-demo.gif]
