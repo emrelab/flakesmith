@@ -4,7 +4,7 @@ Validated on November 10, 2026, macOS ARM64, Go 1.27.3, against two real
 repositories with upstream test-isolation reports. Both checkouts were clean
 when searched. No test body was modified to make discovery succeed.
 
-| Case | Base commit | Upstream fix | Replay before | Compile before | Generated test after fix | Replay after |
+| Case | Base commit | Upstream fix or proposal | Replay before | Compile before | Generated test after fix | Replay after |
 |---|---|---|---|---|---|---|
 | [slug](slug/summary.json) | `1eab3167af84fc96dbabe7b5d9c22d6d4c214800` | [gosimple/slug#83](https://github.com/gosimple/slug/pull/83), `76470d7e1c9c8bb5cf9b9df392b9fb5f35b77e9a` | 5/5 failed | verified RED | PASS | 0/2, exit 3 |
 | [cliproxy](cliproxy/summary.json) | `0074897481fee1dcd595c1caa1d57e6a379b6be6` | [CLIProxyAPI#7356](https://github.com/router-for-me/CLIProxyAPI/pull/7356), `e056459bd00de0c63bbf5e09879704b0d53fd142` | 5/5 failed | verified RED | PASS | 0/2, exit 3 |
@@ -12,7 +12,9 @@ when searched. No test body was modified to make discovery succeed.
 These targeted historical cases demonstrate reproduction and permanence. They
 do not estimate recall or false-positive rate over arbitrary repositories.
 Only the targeted generated regression is claimed green after each fix; no
-claim is made that the entire upstream suite is green.
+claim is made that the entire upstream suite is green. `gosimple/slug#83` is
+merged (2024); `CLIProxyAPI#7356` is an open proposal, applied locally from its
+patch excerpt to prove the regression turns green.
 
 ## Repeat the validation
 

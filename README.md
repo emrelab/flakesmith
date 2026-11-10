@@ -8,6 +8,9 @@
 
 > Reproduce the flake in 30 seconds instead of 30 minutes — and leave a permanent regression test in the repo.
 
+257 tests · CI on linux/macos/windows + a nightly sweep · zero dependencies ·
+two real upstream flake cases reduced to witnesses ([evidence](docs/real-world/README.md))
+
 Finds flaky Go-test failures caused by **order, parallelism, repetition and
 environment**, shrinks them to the smallest witness (polluter → victim) and
 generates a regression test you can commit.
@@ -24,6 +27,18 @@ go test -json  →  hypothesis order  →  ddmin  →  capsule  →  regression 
                   env
 ```
 
+### Why not just `-count=100`?
+
+| Approach | What it gives you | What is left for you |
+|---|---|---|
+| `go test -count=100` / `-shuffle=on` | a red log, eventually | explain the failure, keep the flake |
+| `gotestsum --rerun-fails` | a rerun of failed tests | the flake is still in the repo |
+| `stress`, `-parallel` loops | a higher reproduction probability | still no minimal witness |
+| **flakesmith** | polluter→victim chain, shrunk with ddmin, written as a build-tagged regression test | the fix |
+
+Detection is not the product; **permanence** is. A tracker tells you a test is
+flaky. flakesmith hands you a test file that stays red until the cause is gone.
+
 ![flakesmith in action](docs/flakesmith-demo.gif)
 
 Changing the order requires a temporary witness file, because in Go
@@ -35,10 +50,22 @@ stdlib only.
 
 Prebuilt static binaries ship with every [release](https://github.com/emrelab/flakesmith/releases):
 linux and darwin (amd64/arm64), windows (amd64), each published with a
-`SHA256SUMS` file. No release has been cut yet, so `go install` is the path that
-works today: `go install
-github.com/emrelab/flakesmith/cmd/flakesmith@latest` — and it is also the
-fallback the GitHub Action uses when no prebuilt binary fits its ref.
+`SHA256SUMS` file.
+
+```sh
+# latest release (v0.2.0), linux-amd64 — swap the suffix for your platform
+curl -fsSLO https://github.com/emrelab/flakesmith/releases/download/v0.2.0/flakesmith-0.2.0-linux-amd64
+curl -fsSLO https://github.com/emrelab/flakesmith/releases/download/v0.2.0/SHA256SUMS
+sha256sum -c --ignore-missing SHA256SUMS
+chmod +x flakesmith-0.2.0-linux-amd64 && mv flakesmith-0.2.0-linux-amd64 flakesmith
+
+# or build it yourself (Go 1.24+)
+go install github.com/emrelab/flakesmith/cmd/flakesmith@v0.2.0
+```
+
+The GitHub Action prefers the prebuilt binary of the tag it is pinned to and
+falls back to building its own source, so `@v0.2.0` needs no toolchain setup
+beyond `actions/setup-go`.
 
 ## First 5 minutes
 
@@ -65,6 +92,7 @@ flake found: TestVictim
   class        : order
   polluter     : TestPolluter
   run          : 3/3 failed
+  Wilson 95%   : 43.9%–100.0%
   deterministic: yes
   evidence     : TestPolluter writes, TestVictim reads: seeded
 
@@ -95,13 +123,16 @@ turns green and guards the regression permanently.
 ## Scanned real repos (beyond our own fixtures)
 
 Two targeted upstream cases completed the full lifecycle on November 10, 2026:
-confirmed capsule → replay 5/5 → generated regression RED → upstream fix →
-the same regression GREEN. Both searches used unmodified upstream test bodies.
+confirmed capsule → replay 5/5 → generated regression RED → the fix → the same
+regression GREEN. Both searches used unmodified upstream test bodies. Neither
+case was discovered by this project: both flake reports were already public. The
+contribution here is the witness, not the diagnosis, and the table says which
+fix is merged and which is still a proposal.
 
 | Repository / pinned commit | Minimal polluter → victim | Result |
 |---|---|---|
-| `gosimple/slug` @ `1eab316` | `TestSlugMakeUserSubstituteLang` → `TestSlugMake` | order; upstream [#83](https://github.com/gosimple/slug/pull/83) fix validated |
-| `router-for-me/CLIProxyAPI` @ `0074897` | `TestResponsesWebsocketHomeSelectedAuthCallbackPinsAndReusesFirstSelection` → `TestCodexClientModelsApplyPatchRouting` | order; upstream [#7356](https://github.com/router-for-me/CLIProxyAPI/pull/7356) fix validated |
+| `gosimple/slug` @ `1eab316` | `TestSlugMakeUserSubstituteLang` → `TestSlugMake` | order; fix merged upstream in [#83](https://github.com/gosimple/slug/pull/83) (2024), re-validated here |
+| `router-for-me/CLIProxyAPI` @ `0074897` | `TestResponsesWebsocketHomeSelectedAuthCallbackPinsAndReusesFirstSelection` → `TestCodexClientModelsApplyPatchRouting` | order; proposed fix in [#7356](https://github.com/router-for-me/CLIProxyAPI/pull/7356) (open), applied locally and validated |
 
 Commands, exact revisions, capsules and before/after evidence:
 [real-world validation](docs/real-world/README.md). These are targeted
@@ -267,7 +298,7 @@ cases. Deeper production-code analysis remains deferred pending measured need.
 ## GitHub Actions
 
 ```yaml
-- uses: emrelab/flakesmith@main   # pin a v* release tag once one is published
+- uses: emrelab/flakesmith@v0.2.0
   with:
     paths: ./...
     format: markdown
@@ -285,9 +316,9 @@ when you want the same shape on both.
 The action prefers the prebuilt binary of its own tag (verified against
 `SHA256SUMS`) and falls back to building its own source from
 `GITHUB_ACTION_PATH`: pinning a release tag is what says which version is
-running, with no waiting on the proxy. No `v*` release has been cut yet — the
-only tag is `v0.1.0`, which predates `release.yml` — so the example above pins
-`main`, the one ref that is both current and real. Go 1.24+ is required
+running, with no waiting on the proxy. Pin a tag, never a branch — `@main`
+means every run of your CI silently executes whatever landed this morning.
+Go 1.24+ is required
 (`actions/setup-go` is on you).
 
 Turn an already-red `go test` log into a PR comment — `repro --from-json` shrinks
