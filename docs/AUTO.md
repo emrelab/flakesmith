@@ -1,3 +1,8 @@
+---
+layout: default
+title: Autonomous run
+---
+
 # Autonomous Run — the rulebook
 
 One file, one source of truth. The launcher (`scripts/auto/run.sh`) passes a
