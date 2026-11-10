@@ -1,4 +1,5 @@
 ---
+render_with_liquid: false
 layout: default
 title: flakesmith
 description: Reproduce, shrink and permanently capture flaky Go tests.
