@@ -1,3 +1,8 @@
+---
+layout: default
+title: Issue verification
+---
+
 # Remaining issue verification (2026-11-10)
 
 This change addresses the six issues open after the baseline and regression

@@ -1,3 +1,8 @@
+---
+layout: default
+title: CI reproduction recipe
+---
+
 # CI recipe: a red test log → witness → one PR comment
 
 The pieces already ship; this page is the glue between them (#17).

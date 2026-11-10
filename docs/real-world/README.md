@@ -1,3 +1,8 @@
+---
+layout: default
+title: Real-world witness validation
+---
+
 # Real-world witness validation
 
 Validated on November 10, 2026, macOS ARM64, Go 1.27.3, against two real

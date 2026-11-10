@@ -1,3 +1,8 @@
+---
+layout: default
+title: Source of truth
+---
+
 # Source of Truth
 
 Every concept is defined in **one** place; everywhere else it is only referenced.

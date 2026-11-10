@@ -1,3 +1,8 @@
+---
+layout: default
+title: Architecture
+---
+
 # FlakeSmith — Architecture
 
 **Version:** 1.1 · **Date:** November 1, 2026 · **Last synced:** November 4, 2026
