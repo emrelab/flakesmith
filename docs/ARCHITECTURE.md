@@ -1,7 +1,8 @@
 # FlakeSmith — Architecture
 
 **Version:** 1.1 · **Date:** November 1, 2026 · **Last synced:** November 4, 2026
-**Status:** Implemented; the only tag is `v0.1.0` and no `v*` release has been published yet.
+**Status:** Implemented; `v0.2.0` is the current release (prebuilt binaries for
+linux/darwin/windows, `SHA256SUMS`). The tag list starts at `v0.1.0`.
 
 This document describes not "what we will do" but **how we will build it**: package boundaries, types, algorithms, Go-specific traps, and task order. The product definition is not repeated here.
 
