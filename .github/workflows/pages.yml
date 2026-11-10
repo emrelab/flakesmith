@@ -1,8 +1,14 @@
 name: pages
 
+# The site is built on every change to docs/ and deployed only from main. A
+# build-only PR run is deliberate: Pages mistakes (a broken link base, a theme
+# the github-pages gem does not carry) are invisible until a deploy, and the
+# first deploy is the worst place to discover one.
 on:
   push:
     branches: [main]
+    paths: ['docs/**', '.github/workflows/pages.yml']
+  pull_request:
     paths: ['docs/**', '.github/workflows/pages.yml']
   workflow_dispatch:
 
@@ -20,6 +26,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      # Fails loudly when the repo has no Pages site yet, instead of deploying
+      # nothing and leaving a 404 that looks like a content bug.
       - uses: actions/configure-pages@v5
       - uses: actions/jekyll-build-pages@v1
         with:
@@ -28,6 +36,8 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
 
   deploy:
+    # Pull requests build the site to prove it compiles; they must never publish.
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
     environment:
