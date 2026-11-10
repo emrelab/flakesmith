@@ -9,7 +9,7 @@
 > Reproduce the flake in 30 seconds instead of 30 minutes — and leave a permanent regression test in the repo.
 
 257 tests · CI on linux/macos/windows + a nightly sweep · zero dependencies ·
-two real upstream bugs reduced and fixed ([evidence](docs/real-world/README.md))
+two real upstream flake cases reduced to witnesses ([evidence](docs/real-world/README.md))
 
 Finds flaky Go-test failures caused by **order, parallelism, repetition and
 environment**, shrinks them to the smallest witness (polluter → victim) and
@@ -123,13 +123,16 @@ turns green and guards the regression permanently.
 ## Scanned real repos (beyond our own fixtures)
 
 Two targeted upstream cases completed the full lifecycle on November 10, 2026:
-confirmed capsule → replay 5/5 → generated regression RED → upstream fix →
-the same regression GREEN. Both searches used unmodified upstream test bodies.
+confirmed capsule → replay 5/5 → generated regression RED → the fix → the same
+regression GREEN. Both searches used unmodified upstream test bodies. Neither
+case was discovered by this project: both flake reports were already public. The
+contribution here is the witness, not the diagnosis, and the table says which
+fix is merged and which is still a proposal.
 
 | Repository / pinned commit | Minimal polluter → victim | Result |
 |---|---|---|
-| `gosimple/slug` @ `1eab316` | `TestSlugMakeUserSubstituteLang` → `TestSlugMake` | order; upstream [#83](https://github.com/gosimple/slug/pull/83) fix validated |
-| `router-for-me/CLIProxyAPI` @ `0074897` | `TestResponsesWebsocketHomeSelectedAuthCallbackPinsAndReusesFirstSelection` → `TestCodexClientModelsApplyPatchRouting` | order; upstream [#7356](https://github.com/router-for-me/CLIProxyAPI/pull/7356) fix validated |
+| `gosimple/slug` @ `1eab316` | `TestSlugMakeUserSubstituteLang` → `TestSlugMake` | order; fix merged upstream in [#83](https://github.com/gosimple/slug/pull/83) (2024), re-validated here |
+| `router-for-me/CLIProxyAPI` @ `0074897` | `TestResponsesWebsocketHomeSelectedAuthCallbackPinsAndReusesFirstSelection` → `TestCodexClientModelsApplyPatchRouting` | order; proposed fix in [#7356](https://github.com/router-for-me/CLIProxyAPI/pull/7356) (open), applied locally and validated |
 
 Commands, exact revisions, capsules and before/after evidence:
 [real-world validation](docs/real-world/README.md). These are targeted
