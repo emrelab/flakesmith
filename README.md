@@ -53,18 +53,18 @@ linux and darwin (amd64/arm64), windows (amd64), each published with a
 `SHA256SUMS` file.
 
 ```sh
-# latest release (v0.2.0), linux-amd64 — swap the suffix for your platform
-curl -fsSLO https://github.com/emrelab/flakesmith/releases/download/v0.2.0/flakesmith-0.2.0-linux-amd64
-curl -fsSLO https://github.com/emrelab/flakesmith/releases/download/v0.2.0/SHA256SUMS
+# latest release (v0.2.1), linux-amd64 — swap the suffix for your platform
+curl -fsSLO https://github.com/emrelab/flakesmith/releases/download/v0.2.1/flakesmith-0.2.1-linux-amd64
+curl -fsSLO https://github.com/emrelab/flakesmith/releases/download/v0.2.1/SHA256SUMS
 sha256sum -c --ignore-missing SHA256SUMS
-chmod +x flakesmith-0.2.0-linux-amd64 && mv flakesmith-0.2.0-linux-amd64 flakesmith
+chmod +x flakesmith-0.2.1-linux-amd64 && mv flakesmith-0.2.1-linux-amd64 flakesmith
 
 # or build it yourself (Go 1.24+)
-go install github.com/emrelab/flakesmith/cmd/flakesmith@v0.2.0
+go install github.com/emrelab/flakesmith/cmd/flakesmith@v0.2.1
 ```
 
 The GitHub Action prefers the prebuilt binary of the tag it is pinned to and
-falls back to building its own source, so `@v0.2.0` needs no toolchain setup
+falls back to building its own source, so `@v0.2.1` needs no toolchain setup
 beyond `actions/setup-go`.
 
 ## First 5 minutes
@@ -298,7 +298,7 @@ cases. Deeper production-code analysis remains deferred pending measured need.
 ## GitHub Actions
 
 ```yaml
-- uses: emrelab/flakesmith@v0.2.0
+- uses: emrelab/flakesmith@v0.2.1
   with:
     paths: ./...
     format: markdown

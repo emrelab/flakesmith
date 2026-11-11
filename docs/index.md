@@ -8,7 +8,7 @@ Reproduce a flaky Go test in 30 seconds instead of 30 minutes, shrink it to the
 smallest polluter→victim witness, and leave a permanent regression test behind.
 
 ```sh
-go install github.com/emrelab/flakesmith/cmd/flakesmith@v0.2.0
+go install github.com/emrelab/flakesmith/cmd/flakesmith@v0.2.1
 ```
 
 | Where to go | What is there |
