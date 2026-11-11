@@ -6,6 +6,17 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Third real-world case, and the first where the witness is the contribution
+  rather than a re-validation: `Jamf-Concepts/jamf-cli` @ `977b704`, issue
+  [#370](https://github.com/Jamf-Concepts/jamf-cli/issues/370). The failing
+  `-shuffle=10` log (38 MB, victim at index 1873 of 3146) went through
+  `repro --from-json` and came out as one polluter,
+  `TestResolveAuth_URLNormalization` → `TestCheckAPIMatchRefusesAPlatformCommandOnAnInstanceProfile`,
+  3/3 deterministic. `compile --verify` reported RED; the fix is proposed in
+  [#474](https://github.com/Jamf-Concepts/jamf-cli/pull/474). Evidence and the
+  attribution note: `docs/real-world/jamf-cli/`.
+
 ## [0.2.1] — 2026-11-11
 
 ### Added

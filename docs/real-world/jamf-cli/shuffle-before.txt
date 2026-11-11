@@ -1,0 +1,18 @@
+### pristine -shuffle=1234
+--- FAIL: TestCheckAPIMatchRefusesAPlatformCommandOnAnInstanceProfile (0.00s)
+FAIL
+FAIL	github.com/Jamf-Concepts/jamf-cli/internal/commands	200.821s
+FAIL
+### pristine -shuffle=99991
+--- FAIL: TestProGroupAction_UniqueGroupNameSendsOneWriteThroughTheRoot (0.01s)
+FAIL
+FAIL	github.com/Jamf-Concepts/jamf-cli/internal/commands	79.539s
+FAIL
+### pristine -shuffle=424242
+ok  	github.com/Jamf-Concepts/jamf-cli/internal/commands	72.633s
+### pristine -shuffle=on
+--- FAIL: TestDryRun_ProUploadIsNeverSent (0.00s)
+FAIL
+FAIL	github.com/Jamf-Concepts/jamf-cli/internal/commands	172.601s
+FAIL
+DONE

@@ -1,0 +1,22 @@
+from-json: 1 failing tests
+<repo>/internal/commands: external dependencies (static, package-wide): clock/timing: time.After; clock/timing: time.Now; clock/timing: time.Since; network: net.Listen; randomness: crypto/rand.Read; randomness: math/rand.Shuffle; clock/network/database control is outside flakesmith; reproduction probes still run
+
+flake found: TestCheckAPIMatchRefusesAPlatformCommandOnAnInstanceProfile
+  package      : github.com/Jamf-Concepts/jamf-cli/internal/commands
+  class        : order
+  polluter     : TestResolveAuth_URLNormalization
+  run          : 3/3 failed
+  Wilson 95%   : 43.9%–100.0%
+  deterministic: yes
+  dependencies : clock/timing: time.After; clock/timing: time.Now; clock/timing: time.Since; network: net.Listen; randomness: crypto/rand.Read; randomness: math/rand.Shuffle (static; not a proven cause)
+
+  reproduce:
+    go test internal/commands -run '^TestFlakeWitness$' -count=1 -parallel=1
+
+  capsule      : fs_e628d198b8b2
+  status       : confirmed
+repro3_exit=0
+  polluter     : TestResolveAuth_URLNormalization
+  run          : 3/3 failed
+  capsule      : fs_e628d198b8b2
+  status       : confirmed

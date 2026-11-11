@@ -1,0 +1,14 @@
+### patched full suite (no shuffle)
+ok  	github.com/Jamf-Concepts/jamf-cli/internal/commands	61.748s
+### patched -shuffle=10
+ok  	github.com/Jamf-Concepts/jamf-cli/internal/commands	147.256s
+### patched -shuffle=1234
+ok  	github.com/Jamf-Concepts/jamf-cli/internal/commands	157.138s
+### patched -shuffle=2
+ok  	github.com/Jamf-Concepts/jamf-cli/internal/commands	61.845s
+### patched -shuffle=7
+--- FAIL: TestPlatformAuthToken_PlatformOAuth2Provider_WithExpiry (0.00s)
+FAIL
+FAIL	github.com/Jamf-Concepts/jamf-cli/internal/commands	153.180s
+FAIL
+DONE

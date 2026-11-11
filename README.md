@@ -10,7 +10,7 @@
 > Reproduce the flake in 30 seconds instead of 30 minutes — and leave a permanent regression test in the repo.
 
 257 tests · CI on linux/macos/windows + a nightly sweep · zero dependencies ·
-two real upstream flake cases reduced to witnesses ([evidence](docs/real-world/README.md))
+three real upstream flake cases reduced to witnesses ([evidence](docs/real-world/README.md))
 
 Finds flaky Go-test failures caused by **order, parallelism, repetition and
 environment**, shrinks them to the smallest witness (polluter → victim) and
@@ -123,17 +123,29 @@ turns green and guards the regression permanently.
 
 ## Scanned real repos (beyond our own fixtures)
 
-Two targeted upstream cases completed the full lifecycle on November 10, 2026:
-confirmed capsule → replay 5/5 → generated regression RED → the fix → the same
-regression GREEN. Both searches used unmodified upstream test bodies. Neither
-case was discovered by this project: both flake reports were already public. The
-contribution here is the witness, not the diagnosis, and the table says which
-fix is merged and which is still a proposal.
+Three targeted upstream cases completed the full lifecycle:
 
 | Repository / pinned commit | Minimal polluter → victim | Result |
 |---|---|---|
 | `gosimple/slug` @ `1eab316` | `TestSlugMakeUserSubstituteLang` → `TestSlugMake` | order; fix merged upstream in [#83](https://github.com/gosimple/slug/pull/83) (2024), re-validated here |
 | `router-for-me/CLIProxyAPI` @ `0074897` | `TestResponsesWebsocketHomeSelectedAuthCallbackPinsAndReusesFirstSelection` → `TestCodexClientModelsApplyPatchRouting` | order; proposed fix in [#7356](https://github.com/router-for-me/CLIProxyAPI/pull/7356) (open), applied locally and validated |
+| `Jamf-Concepts/jamf-cli` @ `977b704` | `TestResolveAuth_URLNormalization` → `TestCheckAPIMatchRefusesAPlatformCommandOnAnInstanceProfile` | order; witness + fix proposed in [#474](https://github.com/Jamf-Concepts/jamf-cli/pull/474) (open), 1873 preceding tests shrunk to one polluter |
+
+The first two (November 10) confirm the lifecycle end to end: confirmed capsule
+→ replay 5/5 → generated regression RED → the fix → the same regression GREEN.
+Both searches used unmodified upstream test bodies.
+
+The third is the case the tool exists for. A Jamf maintainer had already
+reported the order dependence and named the mechanism in
+[#370](https://github.com/Jamf-Concepts/jamf-cli/issues/370); nobody had shrunk
+it. `repro --from-json` on the failing `-shuffle` log reduced 1873 preceding
+tests to a single polluter, `compile --verify` produced a regression that is red
+on `main`, and the patch is 11 lines using a helper the repository already had.
+
+None of the three was discovered by this project: every flake report was already
+public. The contribution is the minimal witness — and, in the jamf-cli case, the
+fix — never the diagnosis. The table says which fix is merged and which is still
+a proposal.
 
 Commands, exact revisions, capsules and before/after evidence:
 [real-world validation](docs/real-world/README.md). These are targeted

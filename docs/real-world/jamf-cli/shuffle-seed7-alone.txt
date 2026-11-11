@@ -1,0 +1,5 @@
+### pristine -shuffle=7
+ok  	github.com/Jamf-Concepts/jamf-cli/internal/commands	152.836s
+### patched -shuffle=7
+ok  	github.com/Jamf-Concepts/jamf-cli/internal/commands	151.516s
+DONE

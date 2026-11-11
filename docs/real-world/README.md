@@ -5,14 +5,15 @@ title: Real-world witness validation
 
 # Real-world witness validation
 
-Validated on November 10, 2026, macOS ARM64, Go 1.27.3, against two real
-repositories with upstream test-isolation reports. Both checkouts were clean
+Validated on November 10-11, 2026, macOS ARM64, Go 1.27.3, against three real
+repositories with upstream test-isolation reports. All checkouts were clean
 when searched. No test body was modified to make discovery succeed.
 
 | Case | Base commit | Upstream fix or proposal | Replay before | Compile before | Generated test after fix | Replay after |
 |---|---|---|---|---|---|---|
 | [slug](slug/summary.json) | `1eab3167af84fc96dbabe7b5d9c22d6d4c214800` | [gosimple/slug#83](https://github.com/gosimple/slug/pull/83), `76470d7e1c9c8bb5cf9b9df392b9fb5f35b77e9a` | 5/5 failed | verified RED | PASS | 0/2, exit 3 |
 | [cliproxy](cliproxy/summary.json) | `0074897481fee1dcd595c1caa1d57e6a379b6be6` | [CLIProxyAPI#7356](https://github.com/router-for-me/CLIProxyAPI/pull/7356), `e056459bd00de0c63bbf5e09879704b0d53fd142` | 5/5 failed | verified RED | PASS | 0/2, exit 3 |
+| [jamf-cli](jamf-cli/README.md) | `977b704` | [Jamf-Concepts/jamf-cli#474](https://github.com/Jamf-Concepts/jamf-cli/pull/474) (open) | 3/3 failed, deterministic | verified RED | PASS | default suite + `-shuffle` 2/7/10/1234 green |
 
 These targeted historical cases demonstrate reproduction and permanence. They
 do not estimate recall or false-positive rate over arbitrary repositories.
@@ -20,6 +21,12 @@ Only the targeted generated regression is claimed green after each fix; no
 claim is made that the entire upstream suite is green. `gosimple/slug#83` is
 merged (2024); `CLIProxyAPI#7356` is an open proposal, applied locally from its
 patch excerpt to prove the regression turns green.
+
+The jamf-cli case is the only one where the tool's output *is* the contribution
+rather than a re-validation: the flake was already reported by a maintainer, and
+`repro --from-json` turned 1873 preceding tests into the single polluter the fix
+needs. Attribution is recorded in that case's README — the diagnosis is the
+maintainer's, the minimal witness and the patch are not.
 
 ## Repeat the validation
 

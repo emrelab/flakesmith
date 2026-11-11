@@ -1,0 +1,75 @@
+{
+  "schema": "flakesmith/v1",
+  "id": "fs_e628d198b8b2",
+  "createdAt": "2026-11-11T19:31:30.781584+03:00",
+  "repo": {
+    "module": "github.com/Jamf-Concepts/jamf-cli",
+    "commit": "977b704",
+    "dirty": false
+  },
+  "tool": {
+    "version": "v0.2.1-2-gf5f355b-dirty",
+    "go": "go1.26.2",
+    "os": "darwin",
+    "arch": "arm64"
+  },
+  "target": {
+    "package": "github.com/Jamf-Concepts/jamf-cli/internal/commands",
+    "relDir": "internal/commands",
+    "victim": "TestCheckAPIMatchRefusesAPlatformCommandOnAnInstanceProfile",
+    "victimFile": "gateway_coverage_test.go",
+    "victimLine": 84
+  },
+  "kind": "order",
+  "witness": {
+    "kind": "order",
+    "victim": {
+      "package": "github.com/Jamf-Concepts/jamf-cli/internal/commands",
+      "name": "TestCheckAPIMatchRefusesAPlatformCommandOnAnInstanceProfile"
+    },
+    "polluters": [
+      {
+        "package": "",
+        "name": "TestResolveAuth_URLNormalization"
+      }
+    ],
+    "steps": [
+      {
+        "label": "polluter/TestResolveAuth_URLNormalization"
+      },
+      {
+        "label": "victim/TestCheckAPIMatchRefusesAPlatformCommandOnAnInstanceProfile"
+      }
+    ],
+    "flags": {
+      "parallel": 1
+    },
+    "runs": 3,
+    "func": "TestFlakeWitness"
+  },
+  "observation": {
+    "runs": 3,
+    "failures": 3,
+    "deterministic": true,
+    "failureRate": 1,
+    "wilson95": {
+      "lower": 0.4385029682449546,
+      "upper": 1
+    }
+  },
+  "evidence": {
+    "externalDependencies": [
+      "clock/timing: time.After",
+      "clock/timing: time.Now",
+      "clock/timing: time.Since",
+      "network: net.Listen",
+      "randomness: crypto/rand.Read",
+      "randomness: math/rand.Shuffle"
+    ]
+  },
+  "repro": {
+    "command": "go test internal/commands -run '^TestFlakeWitness$' -count=1 -parallel=1",
+    "generatedTest": "gateway_coverage_TestCheckAPIMatchRefusesAPlatformCommandOnAnInstanceProfile_flakesmith_test.go"
+  },
+  "status": "confirmed"
+}
