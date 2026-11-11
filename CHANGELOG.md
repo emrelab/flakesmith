@@ -6,6 +6,8 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-11-11
+
 ### Added
 - `scripts/docs-drift.sh` and its `docs` CI job: the README is a claim about the
   binary, so the gate fails when a doc says no release exists, when the Action
@@ -67,6 +69,11 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   the AST scanner must see through (`x =`, `x.f =`, `x[i] =`, `*p =`, `(x) =`).
 
 ### Changed
+- The GitHub Action is published as **`go-flake-hunter`** instead of
+  `flakesmith`. Marketplace rejects a name that matches a GitHub user or
+  organization, and `github.com/FlakeSmith` is an unrelated account, so the
+  v0.2.0 listing never appeared. The `uses:` line published in the README is
+  unchanged — the repository, not this field, is what a consumer references.
 - The README describes the release that exists. It claimed "no release has been
   cut yet" and "the only tag is `v0.1.0`" for a day after `v0.2.0` shipped with
   five binaries; the install section now carries the real download and `go
@@ -281,6 +288,7 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   `init`; four probe classes (repeat, order, parallel, env); capsules;
   GitHub Action; fixtures for every flake class; zero external dependencies.
 
-[Unreleased]: https://github.com/emrelab/flakesmith/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/emrelab/flakesmith/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/emrelab/flakesmith/releases/tag/v0.2.1
 [0.2.0]: https://github.com/emrelab/flakesmith/releases/tag/v0.2.0
 [0.1.0]: https://github.com/emrelab/flakesmith/releases/tag/v0.1.0

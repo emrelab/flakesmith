@@ -18,10 +18,12 @@ if grep -rn "cut yet\|has been cut\|not been published" --include='*.md' . \
 fi
 
 # 2. The action example must pin a tag that actually resolves.
-ref=$(grep -rhoE 'uses: *emrelab/flakesmith@[^ #]+' . --include='*.md' \
+# README only: it is the canonical example, and prose elsewhere may quote the
+# ref shape (`emrelab/flakesmith@<ref>`) without claiming anything is pinned.
+ref=$(grep -hoE 'uses: *emrelab/flakesmith@[^ #]+' "$README" \
       | head -1 | sed 's/.*@//')
 if [ -z "$ref" ]; then
-  err "no 'uses: emrelab/flakesmith@<ref>' example found in the docs"
+  err "no 'uses: emrelab/flakesmith@<ref>' example found in $README"
 elif [ "$ref" = "main" ] || [ "$ref" = "master" ]; then
   err "the action example pins the mutable branch '$ref'"
 elif ! git rev-parse -q --verify "refs/tags/$ref" >/dev/null; then

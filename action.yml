@@ -1,4 +1,9 @@
-name: flakesmith
+# Marketplace requires a name that is unique among actions AND does not match
+# any GitHub user or organization. "flakesmith" is held by a user account
+# (github.com/FlakeSmith, unrelated to this project), so the v0.2.0 listing was
+# rejected; the action is published as go-flake-hunter instead. Consumers are
+# unaffected: `uses:` names the repository and the ref, never this field.
+name: go-flake-hunter
 description: Finds flaky failures in Go tests, reduces them to the smallest witness and produces capsules
 author: emrelab
 
