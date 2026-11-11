@@ -2,6 +2,7 @@
 
 [![ci](https://github.com/emrelab/flakesmith/actions/workflows/ci.yml/badge.svg)](https://github.com/emrelab/flakesmith/actions/workflows/ci.yml)
 [![nightly](https://github.com/emrelab/flakesmith/actions/workflows/nightly.yml/badge.svg)](https://github.com/emrelab/flakesmith/actions/workflows/nightly.yml)
+[![Marketplace](https://img.shields.io/badge/marketplace-go--flake--hunter-brightgreen.svg)](https://github.com/marketplace/actions/go-flake-hunter)
 [![Go Reference](https://pkg.go.dev/badge/github.com/emrelab/flakesmith.svg)](https://pkg.go.dev/github.com/emrelab/flakesmith)
 [![Go Report Card](https://goreportcard.com/badge/github.com/emrelab/flakesmith)](https://goreportcard.com/report/github.com/emrelab/flakesmith)
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
@@ -296,6 +297,11 @@ evidence gap in all three shapes, with no witness recall loss in those three
 cases. Deeper production-code analysis remains deferred pending measured need.
 
 ## GitHub Actions
+
+Listed on the Marketplace as
+[**go-flake-hunter**](https://github.com/marketplace/actions/go-flake-hunter)
+(the listing name differs from the repository name; the `uses:` line below is
+what you actually write).
 
 ```yaml
 - uses: emrelab/flakesmith@v0.2.1

@@ -69,9 +69,10 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   the AST scanner must see through (`x =`, `x.f =`, `x[i] =`, `*p =`, `(x) =`).
 
 ### Changed
-- The GitHub Action is published as **`go-flake-hunter`** instead of
-  `flakesmith`. Marketplace rejects a name that matches a GitHub user or
-  organization, and `github.com/FlakeSmith` is an unrelated account, so the
+- The GitHub Action is published on the Marketplace as
+  [**go-flake-hunter**](https://github.com/marketplace/actions/go-flake-hunter)
+  instead of `flakesmith`. Marketplace rejects a name that matches a GitHub user
+  or organization, and `github.com/FlakeSmith` is an unrelated account, so the
   v0.2.0 listing never appeared. The `uses:` line published in the README is
   unchanged — the repository, not this field, is what a consumer references.
 - The README describes the release that exists. It claimed "no release has been
