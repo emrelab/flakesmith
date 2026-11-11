@@ -1,6 +1,6 @@
 ---
 layout: default
-title: jamf-cli — order-dependent test (issue #370)
+title: "jamf-cli — order-dependent test (issue #370)"
 ---
 
 # jamf-cli: an order-dependent test, shrunk to one polluter
