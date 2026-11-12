@@ -28,7 +28,7 @@ jobs:
       - uses: actions/checkout@v7
       # Fails loudly when the repo has no Pages site yet, instead of deploying
       # nothing and leaving a 404 that looks like a content bug.
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
       - uses: actions/jekyll-build-pages@v1
         with:
           source: ./docs
