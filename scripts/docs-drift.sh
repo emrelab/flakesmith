@@ -90,6 +90,52 @@ else
   fi
 fi
 
+# 5. The tag is the release page. release.yml once published with
+#    --generate-notes, which lists merged PR titles and throws away the
+#    annotated tag message: v0.3.0's release page said nothing but "Full
+#    Changelog". The notes a user reads must be the ones a maintainer wrote on
+#    the tag, so the publish step is spelled out here.
+if grep -v '^[[:space:]]*#' .github/workflows/release.yml | grep -q -- '--generate-notes'; then
+  err "release.yml generates notes from the PR list; the tag message must be the release page"
+fi
+if ! grep -q -- '--notes-from-tag' .github/workflows/release.yml; then
+  err "release.yml does not publish with --notes-from-tag"
+fi
+
+# 6. Action versions in a copy-paste recipe are a claim about this repo's own
+#    pins. docs/CI-REPRO.md taught upload-artifact@v4 while every workflow ran
+#    v7: the recipe a reader copies installs a version the project itself moved
+#    past, and no test notices. Any action this repo pins must be pinned
+#    identically wherever the docs show it.
+repo_pins=$(grep -rhoE 'uses: [A-Za-z0-9._/-]+@v[0-9][0-9.]*' \
+              .github/workflows/*.yml action.yml | sed 's/.*uses: //' | sort -u)
+doc_pins=$(grep -rhoE 'uses: [A-Za-z0-9._/-]+@v[0-9][0-9.]*' \
+             --include='*.md' README.md docs | sed 's/.*uses: //' | sort -u)
+for pin in $doc_pins; do
+  action=${pin%@*}
+  # This repo's own action is not a pin to agree with: prose quotes an old ref
+  # on purpose to explain the source-build fallback.
+  case "$action" in "$repo"|"$repo"/*) continue ;; esac
+  want=$(printf '%s\n' "$repo_pins" | awk -F@ -v a="$action" '$1 == a { print $2; exit }')
+  [ -z "$want" ] && continue   # not an action this repo runs: a third-party example
+  [ "$pin" = "$action@$want" ] \
+    || err "docs pin $pin but this repo runs $action@$want"
+done
+
+# 7. The banner's test count is a claim about the suite, and it drifted: it
+#    read "257 tests" long after there were 209, because nobody re-counts a
+#    number by hand. Count what the toolchain sees instead.
+listout="$tmp/tests.list"
+if ! go test -list '.*' ./... > "$listout" 2> "$tmp/tests.err"; then
+  err "go test -list failed, so the README's test count cannot be verified"
+else
+  ntest=$(grep -cE '^Test' "$listout")
+  nfuzz=$(grep -cE '^Fuzz' "$listout")
+  if ! grep -qE "^${ntest} tests \+ ${nfuzz} fuzz targets" README.md; then
+    err "README must say '${ntest} tests + ${nfuzz} fuzz targets' (from go test -list)"
+  fi
+fi
+
 if [ "$fail" -ne 0 ]; then
   echo "docs-drift: FAILED — update the docs or the fixture, not this script" >&2
   exit 1

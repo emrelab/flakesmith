@@ -76,6 +76,35 @@ the rules live in one file, `docs/AUTO.md`.
   that keeps firing past the work: a timer with an empty queue is how a repo
   starts inventing things to do.
 
+## Releasing
+
+A tag is the release. Pushing `v*` builds the five binaries and publishes them
+(`.github/workflows/release.yml`); nothing else is needed, and nothing is cut by
+hand.
+
+```sh
+git checkout main && git pull --ff-only
+git tag -a v0.4.0 -F /tmp/notes.md      # -a is required, see below
+git push origin v0.4.0
+```
+
+**The tag must be annotated, and its message is the release page.** The workflow
+publishes with `gh release create --notes-from-tag`, so the tag body is what a
+reader sees on the release — the one place a version can explain *why* it is
+breaking. `--generate-notes` is deliberately not used: it lists merged PR titles
+and drops the tag message (v0.3.0 shipped with only a compare link because of
+it). A lightweight tag makes the release page empty, and no local gate can see
+that — the tag is only publishable once, so it is checked here, by hand.
+
+Write the notes for someone deciding whether to upgrade, not for the git log:
+
+- what changed, in one paragraph;
+- **BREAKING** — what stops working, and what an existing user must do;
+- anything a user must run again (a rescan, a regenerated baseline).
+
+Then keep `CHANGELOG.md` in step: the version's section is the same content in
+Keep a Changelog shape, and `[Unreleased]` starts empty again.
+
 ## Where to look
 
 | Question | File |

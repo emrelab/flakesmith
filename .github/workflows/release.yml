@@ -121,8 +121,15 @@ jobs:
           # --repo is not decoration: this job checks out nothing, and gh
           # resolves the repository from a git working tree otherwise
           # ("failed to run git: fatal: not a git repository" — v0.2.0).
+          #
+          # --notes-from-tag, not --generate-notes: the release notes are the
+          # annotated tag message, which is the one place a release can say WHY
+          # a version is breaking. --generate-notes lists merged PR titles and
+          # silently discards that message — v0.3.0 shipped a release page
+          # containing nothing but the compare link. CONTRIBUTING.md "Releasing"
+          # states the tag requirement this step depends on.
           gh release create "$GITHUB_REF_NAME" dist/* \
             --repo "$GITHUB_REPOSITORY" \
             --verify-tag \
-            --generate-notes \
+            --notes-from-tag \
             --title "go-flake-hunter $GITHUB_REF_NAME"
