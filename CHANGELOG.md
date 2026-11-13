@@ -6,6 +6,8 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-11-13
+
 ### Changed
 - The project is named `go-flake-hunter` everywhere: module path, module
   directory (`cmd/go-flake-hunter`), binary, `uses:` ref, workflow scaffold,
@@ -26,8 +28,21 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   GitHub redirects the old URL, so a workflow still pinned to
   `emrelab/flakesmith@v0.2.1` keeps resolving; the next tag is cut from the new
   name.
+- The documented install line moves to `@v0.3.0`, and it is not cosmetic:
+  `go install github.com/emrelab/go-flake-hunter/cmd/go-flake-hunter@v0.2.1`
+  fails with "module ... found, but does not contain package", because the
+  module in that tag is still named `flakesmith`. A release is the only way the
+  new path becomes installable.
+- `scripts/docs-drift.sh` also gates the one-name invariant now: the module
+  path, `action.yml`'s `name:`, the `cmd/` directory and the README's `go
+  install`/`uses:` lines must agree, so a rename that misses one of them fails
+  in CI instead of on a user's first install.
 
 ### Added
+- `scripts/make-demo-gif.py` and `make demo`: the README's GIF is rendered from
+  the built binary's real output against `testdata/fixtures/order-basic` instead
+  of being a hand-recorded picture. The previous one had gone stale in three
+  ways (title bar, capsule prefix, build tag) and nobody could regenerate it.
 - Third real-world case, and the first where the witness is the contribution
   rather than a re-validation: `Jamf-Concepts/jamf-cli` @ `977b704`, issue
   [#370](https://github.com/Jamf-Concepts/jamf-cli/issues/370). The failing

@@ -17,7 +17,32 @@ if grep -rn "cut yet\|has been cut\|not been published" --include='*.md' . \
   err "a doc still claims no release exists"
 fi
 
-# 2. The action example must pin a tag that actually resolves.
+# 2. One name. The project once carried three spellings at the same time
+#    (repository, Marketplace listing, prose), and the install line and the
+#    `uses:` example disagreed with each other. The module path is the anchor:
+#    the Action's `name:`, the `cmd/` directory and the install line all derive
+#    from it, so a rename that misses one of them fails here instead of on a
+#    user's first `go install`.
+module=$(awk '/^module /{print $2; exit}' go.mod)
+if [ -z "$module" ]; then
+  err "go.mod has no module line"
+else
+  base=${module##*/}
+  action_name=$(awk '/^name: /{print $2; exit}' action.yml)
+  if [ "$action_name" != "$base" ]; then
+    err "action.yml is named '$action_name' but the module is '$module'"
+  fi
+  [ -d "cmd/$base" ] || err "cmd/$base does not exist (module basename is '$base')"
+  if ! grep -q "go install $module/cmd/$base@" "$README"; then
+    err "$README has no 'go install $module/cmd/$base@<tag>' line"
+  fi
+  repo=${module#github.com/}
+  if ! grep -qE "uses: *$repo@" "$README"; then
+    err "$README has no 'uses: $repo@<ref>' example"
+  fi
+fi
+
+# 3. The action example must pin a tag that actually resolves.
 # README only: it is the canonical example, and prose elsewhere may quote the
 # ref shape (`emrelab/go-flake-hunter@<ref>`) without claiming anything is pinned.
 ref=$(grep -hoE 'uses: *emrelab/go-flake-hunter@[^ #]+' "$README" \
@@ -30,7 +55,7 @@ elif ! git rev-parse -q --verify "refs/tags/$ref" >/dev/null; then
   err "the action example pins '$ref', which is not a tag in this clone"
 fi
 
-# 3. The sample hunt output must be the output the binary produces.
+# 4. The sample hunt output must be the output the binary produces.
 [ -x ./go-flake-hunter ] || { echo "docs-drift: build first (make build)" >&2; exit 2; }
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
