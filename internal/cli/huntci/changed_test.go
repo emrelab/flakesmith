@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/emrelab/flakesmith/internal/clitest"
-	"github.com/emrelab/flakesmith/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/clitest"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
 )
 
 // gitRepo builds a throwaway repository with two test packages and then
@@ -29,8 +29,8 @@ func gitRepo(t *testing.T) string {
 		cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
 		// The user's global git identity and hooks must not affect the test.
 		cmd.Env = append(os.Environ(),
-			"GIT_AUTHOR_NAME=flakesmith", "GIT_AUTHOR_EMAIL=f@example.com",
-			"GIT_COMMITTER_NAME=flakesmith", "GIT_COMMITTER_EMAIL=f@example.com",
+			"GIT_AUTHOR_NAME=go-flake-hunter", "GIT_AUTHOR_EMAIL=f@example.com",
+			"GIT_COMMITTER_NAME=go-flake-hunter", "GIT_COMMITTER_EMAIL=f@example.com",
 			"GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null")
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("git %v: %v\n%s", args, err, out)

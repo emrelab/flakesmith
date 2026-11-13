@@ -74,15 +74,15 @@ jobs:
           set -euo pipefail
           suffix=""
           [ "$GOOS" = windows ] && suffix=".exe"
-          out="dist/flakesmith-$VERSION-$GOOS-$GOARCH$suffix"
+          out="dist/go-flake-hunter-$VERSION-$GOOS-$GOARCH$suffix"
           CGO_ENABLED=0 go build -trimpath \
             -ldflags "-s -w -X main.version=$VERSION" \
-            -o "$out" ./cmd/flakesmith
+            -o "$out" ./cmd/go-flake-hunter
           # Run the version stamp back only on the host platform: a darwin
           # amd64 binary on an arm64 runner would need Rosetta, which the
           # macOS images do not promise.
           if [ "$GOOS" = "$(go env GOHOSTOS)" ] && [ "$GOARCH" = "$(go env GOHOSTARCH)" ]; then
-            "./$out" version | grep -q "flakesmith $VERSION"
+            "./$out" version | grep -q "go-flake-hunter $VERSION"
           else
             echo "cross build: skipping the run check for $GOOS/$GOARCH"
           fi
@@ -90,7 +90,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: binary-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: dist/flakesmith-*
+          path: dist/go-flake-hunter-*
 
   publish:
     # Tag pushes only. A dispatched dry run has no tag to point a release at,
@@ -108,10 +108,10 @@ jobs:
           path: dist
           merge-multiple: true
 
-      # One line per binary: "<sha256>  flakesmith-<version>-<os>-<arch>".
+      # One line per binary: "<sha256>  go-flake-hunter-<version>-<os>-<arch>".
       # The action verifies the binary it downloads against exactly this file.
       - name: checksums
-        run: (cd dist && sha256sum flakesmith-* > SHA256SUMS)
+        run: (cd dist && sha256sum go-flake-hunter-* > SHA256SUMS)
 
       - name: release
         env:
@@ -125,4 +125,4 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --verify-tag \
             --generate-notes \
-            --title "flakesmith $GITHUB_REF_NAME"
+            --title "go-flake-hunter $GITHUB_REF_NAME"

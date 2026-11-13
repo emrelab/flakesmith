@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/emrelab/flakesmith/internal/domain"
-	"github.com/emrelab/flakesmith/internal/gotest"
-	"github.com/emrelab/flakesmith/internal/policy"
-	"github.com/emrelab/flakesmith/internal/probe"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/gotest"
+	"github.com/emrelab/go-flake-hunter/internal/policy"
+	"github.com/emrelab/go-flake-hunter/internal/probe"
 )
 
 type scanProbe struct {

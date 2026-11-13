@@ -17,9 +17,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/emrelab/flakesmith/internal/capsule"
-	"github.com/emrelab/flakesmith/internal/cli"
-	"github.com/emrelab/flakesmith/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/capsule"
+	"github.com/emrelab/go-flake-hunter/internal/cli"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
 )
 
 // Run executes the CLI in-process and returns exit code, stdout and stderr.
@@ -51,7 +51,7 @@ func FixtureDir(t testing.TB, name string) string {
 		if err != nil || rel == "." {
 			return err
 		}
-		// flakesmith's own output is not copied: a regression test left over
+		// go-flake-hunter's own output is not copied: a regression test left over
 		// from a manual run would redeclare the same function in the copy.
 		for _, marker := range []string{domain.CapsuleDir, domain.PersistentFileSuffix, domain.WitnessFilePrefix} {
 			if strings.Contains(path, marker) {

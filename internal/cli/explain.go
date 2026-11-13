@@ -4,8 +4,8 @@ import (
 	"context"
 	"flag"
 
-	"github.com/emrelab/flakesmith/internal/capsule"
-	"github.com/emrelab/flakesmith/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/capsule"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
 )
 
 // explainCmd renders a stored capsule for a human.
@@ -21,7 +21,7 @@ func explainCmd(ctx context.Context, args []string, out IO) error {
 	fs := flag.NewFlagSet("explain", flag.ContinueOnError)
 	fs.SetOutput(out.Stderr)
 	fs.StringVar(&format, "format", "text", "output format: text|json|markdown")
-	fs.StringVar(&dir, "capsule-dir", "", "capsule directory (default .flakesmith)")
+	fs.StringVar(&dir, "capsule-dir", "", "capsule directory (default .go-flake-hunter)")
 	if err := parseFlags(fs, args); err != nil {
 		return err
 	}

@@ -10,12 +10,12 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/emrelab/flakesmith/internal/capsule"
-	"github.com/emrelab/flakesmith/internal/domain"
-	"github.com/emrelab/flakesmith/internal/facts"
-	"github.com/emrelab/flakesmith/internal/gotest"
-	"github.com/emrelab/flakesmith/internal/harness"
-	"github.com/emrelab/flakesmith/internal/policy"
+	"github.com/emrelab/go-flake-hunter/internal/capsule"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/facts"
+	"github.com/emrelab/go-flake-hunter/internal/gotest"
+	"github.com/emrelab/go-flake-hunter/internal/harness"
+	"github.com/emrelab/go-flake-hunter/internal/policy"
 )
 
 // replayCmd re-runs a capsule's witness N times and reports how often the
@@ -37,7 +37,7 @@ func replayCmd(ctx context.Context, args []string, out IO) error {
 	fs.SetOutput(out.Stderr)
 	fs.IntVar(&n, "n", 5, "how many times to run")
 	fs.StringVar(&envKV, "env", "", "KEY=VALUE for env flakes (the capsule does not store the value)")
-	fs.StringVar(&dir, "capsule-dir", "", "capsule directory (default .flakesmith)")
+	fs.StringVar(&dir, "capsule-dir", "", "capsule directory (default .go-flake-hunter)")
 	fs.StringVar(&pkgArg, "pkg", "", "package directory (default: the directory the capsule recorded)")
 	fs.StringVar(&polluterArg, "polluter-pkg", "", "polluter package directory (cross-binary capsules; default: the capsule's polluterRelDir)")
 	if err := parseFlags(fs, args); err != nil {

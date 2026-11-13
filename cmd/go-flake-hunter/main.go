@@ -1,4 +1,4 @@
-// Command flakesmith reproduces flakes in Go tests and generates a
+// Command go-flake-hunter reproduces flakes in Go tests and generates a
 // regression test that can be committed to the repository.
 package main
 
@@ -8,7 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/emrelab/flakesmith/internal/cli"
+	"github.com/emrelab/go-flake-hunter/internal/cli"
 )
 
 // version is filled at build time via -ldflags "-X main.version=0.1.0".

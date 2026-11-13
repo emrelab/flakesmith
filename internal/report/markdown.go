@@ -5,7 +5,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/emrelab/flakesmith/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
 )
 
 // Markdown renders the capsule as GitHub-flavoured markdown.

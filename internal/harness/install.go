@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/emrelab/flakesmith/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
 )
 
 // Harness is one installed witness file. Remove is safe to call twice.

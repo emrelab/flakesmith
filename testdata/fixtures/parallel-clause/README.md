@@ -17,7 +17,7 @@ the cross-clause name reached the template, and the probe died with
 of a clean refusal. Now cross-clause candidates are split off, never enter the
 witness, and the probe reports this file's expected verdict.
 
-**Expected:** `flakesmith hunt .` → `ErrUnsupportedTest`, exit code **5**, and
+**Expected:** `go-flake-hunter hunt .` → `ErrUnsupportedTest`, exit code **5**, and
 the message names both tests and both packages.
 
 Contract (`go test`, no hunter involved):

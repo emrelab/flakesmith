@@ -1,4 +1,4 @@
-title: flakesmith
+title: go-flake-hunter
 description: Reproduce, shrink and permanently capture flaky Go tests.
 theme: jekyll-theme-cayman
 markdown: kramdown
@@ -24,4 +24,4 @@ relative_links:
   collections: false
 
 exclude:
-  - flakesmith-demo.gif
+  - go-flake-hunter-demo.gif

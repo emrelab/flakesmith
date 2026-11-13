@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/emrelab/flakesmith/internal/clitest"
+	"github.com/emrelab/go-flake-hunter/internal/clitest"
 )
 
 // The parallel-race fixture is the instrument every concurrency claim is
@@ -126,7 +126,7 @@ func TestParallelRaceFixtureContract(t *testing.T) {
 	})
 
 	t.Run("no witness file is left behind", func(t *testing.T) {
-		left, err := filepath.Glob(filepath.Join(dir, "fs_witness*"))
+		left, err := filepath.Glob(filepath.Join(dir, "gfh_witness*"))
 		if err != nil {
 			t.Fatal(err)
 		}

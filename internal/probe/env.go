@@ -4,8 +4,8 @@ import (
 	"context"
 	"os"
 
-	"github.com/emrelab/flakesmith/internal/domain"
-	"github.com/emrelab/flakesmith/internal/gotest"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/gotest"
 )
 
 // Env detects environment-dependent flakes: the test passes under one value of

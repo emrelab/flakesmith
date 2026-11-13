@@ -1,8 +1,9 @@
 # Marketplace requires a name that is unique among actions AND does not match
-# any GitHub user or organization. "flakesmith" is held by a user account
-# (github.com/FlakeSmith, unrelated to this project), so the v0.2.0 listing was
-# rejected; the action is published as go-flake-hunter instead. Consumers are
-# unaffected: `uses:` names the repository and the ref, never this field.
+# any GitHub user or organization — that is why this tool cannot be listed
+# under a name some user account already owns. The listing is published under
+# the repository's own name, so `name` here and `uses: emrelab/go-flake-hunter@<ref>`
+# in a consumer's workflow must stay identical: a consumer searches the listing
+# and then writes the ref.
 name: go-flake-hunter
 description: Finds flaky failures in Go tests, reduces them to the smallest witness and produces capsules
 author: emrelab
@@ -58,7 +59,7 @@ runs:
     # runs. Anything unexpected — branch/SHA ref, missing asset, checksum
     # mismatch, version stamp disagreeing, no gh CLI — exits 0 without
     # claiming the install, and the source build below runs untouched.
-    - name: install prebuilt flakesmith
+    - name: install prebuilt go-flake-hunter
       id: prebuilt
       shell: bash
       env:
@@ -88,16 +89,16 @@ runs:
           ARM64) goarch=arm64 ;;
           *) echo "arch '$RUNNER_ARCH' has no prebuilt target; building from source"; exit 0 ;;
         esac
-        asset="flakesmith-$version-$goos-$goarch"
-        exe="flakesmith"
-        if [ "$goos" = windows ]; then asset="$asset.exe"; exe="flakesmith.exe"; fi
+        asset="go-flake-hunter-$version-$goos-$goarch"
+        exe="go-flake-hunter"
+        if [ "$goos" = windows ]; then asset="$asset.exe"; exe="go-flake-hunter.exe"; fi
 
         command -v gh >/dev/null 2>&1 || { echo "no gh CLI; building from source"; exit 0; }
         rm -rf "$dir"; mkdir -p "$dir"
         # One call, exact patterns: fetching the release tag's assets by name,
         # authenticated with the caller's token (public releases too — gh
         # insists on a token for API access).
-        gh release download "$ACTION_REF" --repo emrelab/flakesmith --clobber --dir "$dir" \
+        gh release download "$ACTION_REF" --repo emrelab/go-flake-hunter --clobber --dir "$dir" \
           --pattern "$asset" --pattern SHA256SUMS \
           || { echo "release '$ACTION_REF' has no '$asset'; building from source"; exit 0; }
 
@@ -115,7 +116,7 @@ runs:
         # The version stamp is the identity contract: trust the binary's own
         # words, not the URL it came from.
         chmod +x "$dir/$asset"
-        "$dir/$asset" version | grep -qx "flakesmith $version" \
+        "$dir/$asset" version | grep -qx "go-flake-hunter $version" \
           || { echo "'$asset' reports a foreign version; building from source"; exit 0; }
 
         bin="$RUNNER_TEMP/bin"; mkdir -p "$bin"
@@ -123,19 +124,19 @@ runs:
         chmod +x "$bin/$exe"
         echo "$bin" >> "$GITHUB_PATH"
         echo "installed=true" >> "$GITHUB_OUTPUT"
-        echo "using prebuilt flakesmith $ACTION_REF ($goos/$goarch)"
+        echo "using prebuilt go-flake-hunter $ACTION_REF ($goos/$goarch)"
 
-    # The action builds from its own source: `uses: emrelab/flakesmith@v0.1.0`
+    # The action builds from its own source: `uses: emrelab/go-flake-hunter@v0.1.0`
     # says which version is running. `go install ...@latest` could not do this —
     # with no tag it installs nothing, and with a tag the action ref and the
     # running binary could be different versions.
-    - name: build flakesmith
+    - name: build go-flake-hunter
       if: steps.prebuilt.outputs.installed != 'true'
       shell: bash
       run: |
         set -euo pipefail
         cd "$GITHUB_ACTION_PATH"
-        go build -trimpath -o "$RUNNER_TEMP/bin/flakesmith" ./cmd/flakesmith
+        go build -trimpath -o "$RUNNER_TEMP/bin/go-flake-hunter" ./cmd/go-flake-hunter
         echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
 
     - name: hunt flakes
@@ -150,15 +151,15 @@ runs:
         FS_SARIF: ${{ inputs.upload-sarif }}
       run: |
         set -uo pipefail
-        report="$RUNNER_TEMP/flakesmith-report.$FS_FORMAT"
+        report="$RUNNER_TEMP/go-flake-hunter-report.$FS_FORMAT"
         args=(hunt $FS_PATHS --format "$FS_FORMAT" --budget "$FS_BUDGET" --timeout "$FS_TIMEOUT")
         [ "$FS_FAIL" = "true" ] && args+=(--fail-on-flake)
         # One hunt, two consumers: the report keeps its format, the SARIF
         # side file goes to code scanning. A second hunt would double the
         # budget for the same facts.
-        [ "$FS_SARIF" = "true" ] && args+=(--sarif "$RUNNER_TEMP/flakesmith.sarif")
+        [ "$FS_SARIF" = "true" ] && args+=(--sarif "$RUNNER_TEMP/go-flake-hunter.sarif")
 
-        flakesmith "${args[@]}" | tee "$report"
+        go-flake-hunter "${args[@]}" | tee "$report"
         status=${PIPESTATUS[0]}
 
         # Count confirmed capsules only. Suspected and partial findings remain
@@ -180,7 +181,7 @@ runs:
       env:
         FS_FORMAT: ${{ inputs.format }}
       run: |
-        report="$RUNNER_TEMP/flakesmith-report.$FS_FORMAT"
+        report="$RUNNER_TEMP/go-flake-hunter-report.$FS_FORMAT"
         if [ -f "$report" ]; then cat "$report" >> "$GITHUB_STEP_SUMMARY"; fi
 
     # Opt-in code scanning. SARIF findings ANNOTATE — they never redden the
@@ -191,14 +192,14 @@ runs:
       if: always() && inputs.upload-sarif == 'true'
       uses: github/codeql-action/upload-sarif@v3
       with:
-        sarif_file: ${{ runner.temp }}/flakesmith.sarif
-        category: flakesmith
+        sarif_file: ${{ runner.temp }}/go-flake-hunter.sarif
+        category: go-flake-hunter
 
     - name: save capsules
       if: always()
       uses: actions/upload-artifact@v7
       with:
-        name: flakesmith-capsules
-        path: "**/.flakesmith/*.json"
+        name: go-flake-hunter-capsules
+        path: "**/.go-flake-hunter/*.json"
         if-no-files-found: ignore
         retention-days: 30

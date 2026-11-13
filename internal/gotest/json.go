@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/emrelab/flakesmith/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
 )
 
 // event is one test2json record (`go test -json`).

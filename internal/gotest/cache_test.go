@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/emrelab/flakesmith/internal/domain"
-	"github.com/emrelab/flakesmith/internal/gotest"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/gotest"
 )
 
 // A passing run asked again must not reach the real binary: the shuffle sweep

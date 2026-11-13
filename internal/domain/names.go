@@ -7,13 +7,13 @@ import "strings"
 // Critical: files starting with "_" or "." are SKIPPED by the go tool
 // (verified on November 1, 2026), so the temporary harness takes a "zz_" prefix.
 const (
-	WitnessFilePrefix    = "zz_flakesmith_witness_"
+	WitnessFilePrefix    = "zz_goflakehunter_witness_"
 	WitnessFileSuffix    = "_test.go"
 	WitnessFuncName      = "TestFlakeWitness"
-	PersistentFileSuffix = "_flakesmith_test.go"
-	PersistentBuildTag   = "flakesmith"
+	PersistentFileSuffix = "_goflakehunter_test.go"
+	PersistentBuildTag   = "goflakehunter"
 	PersistentFuncPrefix = "TestFlakeRegression_"
-	CapsuleDir           = ".flakesmith"
+	CapsuleDir           = ".go-flake-hunter"
 )
 
 // WitnessFileName is the temporary harness file name. The suffix prevents collisions (1 per package).

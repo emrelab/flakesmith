@@ -1,10 +1,10 @@
-# flakesmith
+# go-flake-hunter
 
-[![ci](https://github.com/emrelab/flakesmith/actions/workflows/ci.yml/badge.svg)](https://github.com/emrelab/flakesmith/actions/workflows/ci.yml)
-[![nightly](https://github.com/emrelab/flakesmith/actions/workflows/nightly.yml/badge.svg)](https://github.com/emrelab/flakesmith/actions/workflows/nightly.yml)
+[![ci](https://github.com/emrelab/go-flake-hunter/actions/workflows/ci.yml/badge.svg)](https://github.com/emrelab/go-flake-hunter/actions/workflows/ci.yml)
+[![nightly](https://github.com/emrelab/go-flake-hunter/actions/workflows/nightly.yml/badge.svg)](https://github.com/emrelab/go-flake-hunter/actions/workflows/nightly.yml)
 [![Marketplace](https://img.shields.io/badge/marketplace-go--flake--hunter-brightgreen.svg)](https://github.com/marketplace/actions/go-flake-hunter)
-[![Go Reference](https://pkg.go.dev/badge/github.com/emrelab/flakesmith.svg)](https://pkg.go.dev/github.com/emrelab/flakesmith)
-[![Go Report Card](https://goreportcard.com/badge/github.com/emrelab/flakesmith)](https://goreportcard.com/report/github.com/emrelab/flakesmith)
+[![Go Reference](https://pkg.go.dev/badge/github.com/emrelab/go-flake-hunter.svg)](https://pkg.go.dev/github.com/emrelab/go-flake-hunter)
+[![Go Report Card](https://goreportcard.com/badge/github.com/emrelab/go-flake-hunter)](https://goreportcard.com/report/github.com/emrelab/go-flake-hunter)
 [![license](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 > Reproduce the flake in 30 seconds instead of 30 minutes — and leave a permanent regression test in the repo.
@@ -35,12 +35,12 @@ go test -json  →  hypothesis order  →  ddmin  →  capsule  →  regression 
 | `go test -count=100` / `-shuffle=on` | a red log, eventually | explain the failure, keep the flake |
 | `gotestsum --rerun-fails` | a rerun of failed tests | the flake is still in the repo |
 | `stress`, `-parallel` loops | a higher reproduction probability | still no minimal witness |
-| **flakesmith** | polluter→victim chain, shrunk with ddmin, written as a build-tagged regression test | the fix |
+| **go-flake-hunter** | polluter→victim chain, shrunk with ddmin, written as a build-tagged regression test | the fix |
 
 Detection is not the product; **permanence** is. A tracker tells you a test is
-flaky. flakesmith hands you a test file that stays red until the cause is gone.
+flaky. go-flake-hunter hands you a test file that stays red until the cause is gone.
 
-![flakesmith in action](docs/flakesmith-demo.gif)
+![go-flake-hunter in action](docs/go-flake-hunter-demo.gif)
 
 Changing the order requires a temporary witness file, because in Go
 `go test -run '^(TestA|TestB)$'` runs in **source order** — the regex order
@@ -49,19 +49,19 @@ stdlib only.
 
 ## Install
 
-Prebuilt static binaries ship with every [release](https://github.com/emrelab/flakesmith/releases):
+Prebuilt static binaries ship with every [release](https://github.com/emrelab/go-flake-hunter/releases):
 linux and darwin (amd64/arm64), windows (amd64), each published with a
 `SHA256SUMS` file.
 
 ```sh
 # latest release (v0.2.1), linux-amd64 — swap the suffix for your platform
-curl -fsSLO https://github.com/emrelab/flakesmith/releases/download/v0.2.1/flakesmith-0.2.1-linux-amd64
-curl -fsSLO https://github.com/emrelab/flakesmith/releases/download/v0.2.1/SHA256SUMS
+curl -fsSLO https://github.com/emrelab/go-flake-hunter/releases/download/v0.2.1/go-flake-hunter-0.2.1-linux-amd64
+curl -fsSLO https://github.com/emrelab/go-flake-hunter/releases/download/v0.2.1/SHA256SUMS
 sha256sum -c --ignore-missing SHA256SUMS
-chmod +x flakesmith-0.2.1-linux-amd64 && mv flakesmith-0.2.1-linux-amd64 flakesmith
+chmod +x go-flake-hunter-0.2.1-linux-amd64 && mv go-flake-hunter-0.2.1-linux-amd64 go-flake-hunter
 
 # or build it yourself (Go 1.24+)
-go install github.com/emrelab/flakesmith/cmd/flakesmith@v0.2.1
+go install github.com/emrelab/go-flake-hunter/cmd/go-flake-hunter@v0.2.1
 ```
 
 The GitHub Action prefers the prebuilt binary of the tag it is pinned to and
@@ -71,18 +71,18 @@ beyond `actions/setup-go`.
 ## First 5 minutes
 
 ```sh
-go install github.com/emrelab/flakesmith/cmd/flakesmith@latest
+go install github.com/emrelab/go-flake-hunter/cmd/go-flake-hunter@latest
 
 # 1) scan every package (default: 1000 runs / 5 min budget)
 cd ~/projects/service
-flakesmith hunt ./...
+go-flake-hunter hunt ./...
 
 # 2) turn the found flake into a permanent test file
-flakesmith compile
-go test -tags flakesmith -run '^TestFlakeRegression_' .
+go-flake-hunter compile
+go test -tags goflakehunter -run '^TestFlakeRegression_' .
 
 # 3) send the capsule to your team (runs no tests, needs no `go`)
-flakesmith explain .flakesmith/fs_*.json --format markdown
+go-flake-hunter explain .go-flake-hunter/gfh_*.json --format markdown
 ```
 
 Real output (`testdata/fixtures/order-basic`):
@@ -100,16 +100,16 @@ flake found: TestVictim
   reproduce:
     go test . -run '^TestFlakeWitness$' -count=1 -parallel=1
 
-  capsule      : fs_e3c71933f905
+  capsule      : gfh_e3c71933f905
   status       : confirmed
 ```
 
 The generated regression test (`compile`):
 
 ```go
-//go:build flakesmith
+//go:build goflakehunter
 
-// Code generated by flakesmith; DO NOT EDIT.
+// Code generated by go-flake-hunter; DO NOT EDIT.
 func TestFlakeRegression_TestVictim(t *testing.T) {
 	t.Run("polluter/TestPolluter", TestPolluter)
 	t.Run("victim/TestVictim", TestVictim)
@@ -175,11 +175,11 @@ replay produces. Reported as-is; no witness claimed.
 Across all seven scans: **zero findings, so zero false findings.** We state it
 that way on purpose — seven scans that emitted nothing do not measure a false
 positive *rate*; they only show the hunter stayed quiet on healthy code. Every
-witness flakesmith does emit must deterministically replay (that is the
+witness go-flake-hunter does emit must deterministically replay (that is the
 contract the capsule carries). The targeted cases above add witnesses, but
 neither they nor these seven scans establish a general false-positive rate.
 The two targeted reproductions above complete the real-world witness
-milestone ([#1](https://github.com/emrelab/flakesmith/issues/1)); the seven
+milestone ([#1](https://github.com/emrelab/go-flake-hunter/issues/1)); the seven
 earlier scans remain evidence only about those specific scans.
 
 ## Commands
@@ -191,7 +191,7 @@ earlier scans remain evidence only about those specific scans.
 | `compile [id] [--verify]` | generates a permanent regression test from a capsule; `--verify` runs the artifact once | with `--verify` |
 | `replay [id]` | runs the witness N times, verifies determinism | ✅ |
 | `explain [id]` | renders a capsule as a text/JSON/markdown report | ❌ |
-| `init [dir]` | writes a `.github/workflows/flakesmith.yml` scaffold | ❌ |
+| `init [dir]` | writes a `.github/workflows/go-flake-hunter.yml` scaffold | ❌ |
 
 Shared flags: `--format text|json|markdown|sarif` · `--budget N` · `--timeout 10m` ·
 `--seeds N` · `--repeat N` · `--capsule-dir DIR` · `--fail-on-flake` · `--race`
@@ -203,18 +203,18 @@ takes `--changed` ·
 any format — one hunt feeds both the job summary and code scanning). `compile`
 also takes `--pkg DIR`, `--print`, `--dry-run` and `--verify`.
 
-Baselines use commit-independent defect fingerprints (`flakesmith/baseline/v2`),
+Baselines use commit-independent defect fingerprints (`go-flake-hunter/baseline/v2`),
 so an unrelated commit does not turn a known flake into a new finding. The
 fingerprint covers module, victim package/name, class, polluter identities,
 environment keys and same-/cross-process shape; run flags and provenance stay
 in the capsule. Legacy v1 baselines must be regenerated explicitly with
-`flakesmith hunt ./... --write-baseline` (add `--baseline FILE` for a custom
+`go-flake-hunter hunt ./... --write-baseline` (add `--baseline FILE` for a custom
 path). Scan every previously baselined package: v1 hashes cannot be migrated
 without their witnesses. Corrupt baseline files are refused, including during
 `--write-baseline`.
 
 New regression files include the victim name, for example
-`checkout_TestVictim_flakesmith_test.go`. Compiling a second victim from the
+`checkout_TestVictim_goflakehunter_test.go`. Compiling a second victim from the
 same source file preserves the first. Recompiling one victim updates that
 victim's regression; an existing legacy generated file is reused for its own
 victim to avoid duplicate declarations. User-owned output files are never
@@ -240,11 +240,11 @@ note — evidence is never invented.
 `--format json` produces **a single document** (`flakes: []` on a clean run):
 
 ```json
-{ "schema": "flakesmith/v1", "flakes": [ { "id": "fs_…", "kind": "order", … } ],
+{ "schema": "go-flake-hunter/v2", "flakes": [ { "id": "gfh_…", "kind": "order", … } ],
   "runs": 42, "maxRuns": 1000 }
 ```
 
-`flakesmith init --replay-capsule .flakesmith/fs_ID.json` adds a regression
+`go-flake-hunter init --replay-capsule .go-flake-hunter/gfh_ID.json` adds a regression
 gate for a committed capsule: replayed failure turns CI red, a strictly
 non-reproducing witness turns it green, and build/cancellation errors remain
 errors. Cross-binary capsules replay both stages; no generated test is needed.
@@ -311,12 +311,12 @@ cases. Deeper production-code analysis remains deferred pending measured need.
 ## GitHub Actions
 
 Listed on the Marketplace as
-[**go-flake-hunter**](https://github.com/marketplace/actions/go-flake-hunter)
-(the listing name differs from the repository name; the `uses:` line below is
-what you actually write).
+[**go-flake-hunter**](https://github.com/marketplace/actions/go-flake-hunter) —
+the same name as the repository, so the listing and the `uses:` line below
+match.
 
 ```yaml
-- uses: emrelab/flakesmith@v0.2.1
+- uses: emrelab/go-flake-hunter@v0.2.1
   with:
     paths: ./...
     format: markdown
@@ -326,7 +326,7 @@ what you actually write).
 
 **Budget defaults differ by surface, on purpose.** Local `hunt` starts at 1000
 runs / 5m — a laptop can afford the coverage of `./...`; the Action and the
-`flakesmith init` scaffold start at 200 runs / 10m, because a shared runner's
+`go-flake-hunter init` scaffold start at 200 runs / 10m, because a shared runner's
 wall clock is the scarce resource and ten minutes is what a job can spend on one
 hunt before it looks hung. Pass `budget:`/`--budget` and `timeout:`/`--timeout`
 when you want the same shape on both.
@@ -342,7 +342,7 @@ Go 1.24+ is required
 Turn an already-red `go test` log into a PR comment — `repro --from-json` shrinks
 the log's own failures to a witness, no re-scan: [`docs/CI-REPRO.md`](docs/CI-REPRO.md).
 
-`flakesmith init` writes this file into your repo (it never overwrites an
+`go-flake-hunter init` writes this file into your repo (it never overwrites an
 existing one). The default is soft mode: a newly adopted flake hunter that
 turns CI red on day one gets removed on day two.
 
@@ -362,15 +362,15 @@ Full design: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ```sh
 make test    # go test -race ./...
-make build   # ./flakesmith
+make build   # ./go-flake-hunter
 make fmt     # gofmt
 ```
 
 Every module under `testdata/fixtures` demonstrates a single flake class;
 adding a new class is the easiest entry point. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-CI dogfoods the tool on its own repo: the `self-hunt` job runs `flakesmith
-hunt` against flakesmith's packages, so a leaked witness file or a global
+CI dogfoods the tool on its own repo: the `self-hunt` job runs `go-flake-hunter
+hunt` against go-flake-hunter's packages, so a leaked witness file or a global
 state leak turns our CI red before it could embarrass a user.
 
 ## License

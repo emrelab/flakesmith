@@ -5,9 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/emrelab/flakesmith/internal/domain"
-	"github.com/emrelab/flakesmith/internal/gotest"
-	"github.com/emrelab/flakesmith/internal/probe"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/gotest"
+	"github.com/emrelab/go-flake-hunter/internal/probe"
 )
 
 func victim() domain.TestID { return domain.TestID{Package: "p", Name: "TestA"} }

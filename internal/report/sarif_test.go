@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/emrelab/flakesmith/internal/domain"
-	"github.com/emrelab/flakesmith/internal/report"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/report"
 )
 
 // hunt --format sarif (#4): GitHub code scanning pins each flake on the PR
@@ -24,7 +24,7 @@ func TestSARIFAnnotatesVictim(t *testing.T) {
 			Victim:    domain.TestID{Package: "example.com/app", Name: "TestOrder"},
 			Polluters: []domain.TestID{{Package: "example.com/app", Name: "TestSeed"}},
 		},
-		Repro: domain.Repro{Command: "go test internal/app -run 'TestFlakesmithWitness$' -count=1"},
+		Repro: domain.Repro{Command: "go test internal/app -run 'TestGoFlakeHunterWitness$' -count=1"},
 	}
 
 	var buf strings.Builder
@@ -39,7 +39,7 @@ func TestSARIFAnnotatesVictim(t *testing.T) {
 	if doc.Version != "2.1.0" {
 		t.Errorf("version = %q", doc.Version)
 	}
-	if len(doc.Runs) != 1 || doc.Runs[0].Tool.Driver.Name != "FlakeSmith" {
+	if len(doc.Runs) != 1 || doc.Runs[0].Tool.Driver.Name != "go-flake-hunter" {
 		t.Fatalf("runs/tool: %+v", doc.Runs)
 	}
 	if len(doc.Runs[0].Tool.Driver.Rules) != 4 {
@@ -49,7 +49,7 @@ func TestSARIFAnnotatesVictim(t *testing.T) {
 	if len(res) != 1 {
 		t.Fatalf("results = %d, want 1", len(res))
 	}
-	if res[0].RuleID != "flakesmith/order" || res[0].Level != "warning" {
+	if res[0].RuleID != "go-flake-hunter/order" || res[0].Level != "warning" {
 		t.Errorf("result = %+v", res[0])
 	}
 	if !strings.Contains(res[0].Message.Text, "TestSeed") ||

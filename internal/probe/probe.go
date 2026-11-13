@@ -3,9 +3,9 @@ package probe
 import (
 	"context"
 
-	"github.com/emrelab/flakesmith/internal/domain"
-	"github.com/emrelab/flakesmith/internal/facts"
-	"github.com/emrelab/flakesmith/internal/gotest"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/facts"
+	"github.com/emrelab/go-flake-hunter/internal/gotest"
 )
 
 // Target is what a probe investigates.

@@ -8,7 +8,7 @@ import (
 )
 
 // flockExclusive takes an exclusive advisory lock, blocking until it is free.
-// Advisory locks are enough here: every participant is a flakesmith process.
+// Advisory locks are enough here: every participant is a go-flake-hunter process.
 func flockExclusive(f *os.File) error {
 	return syscall.Flock(int(f.Fd()), syscall.LOCK_EX)
 }

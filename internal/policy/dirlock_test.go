@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/emrelab/flakesmith/internal/policy"
+	"github.com/emrelab/go-flake-hunter/internal/policy"
 )
 
 // The lock must really serialize different goroutines.

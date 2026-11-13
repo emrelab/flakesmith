@@ -8,12 +8,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/emrelab/flakesmith/internal/capsule"
-	"github.com/emrelab/flakesmith/internal/compile"
-	"github.com/emrelab/flakesmith/internal/domain"
-	"github.com/emrelab/flakesmith/internal/facts"
-	"github.com/emrelab/flakesmith/internal/gotest"
-	"github.com/emrelab/flakesmith/internal/harness"
+	"github.com/emrelab/go-flake-hunter/internal/capsule"
+	"github.com/emrelab/go-flake-hunter/internal/compile"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/facts"
+	"github.com/emrelab/go-flake-hunter/internal/gotest"
+	"github.com/emrelab/go-flake-hunter/internal/harness"
 )
 
 // compileCmd turns one capsule (or the newest in the store) into a permanent
@@ -28,7 +28,7 @@ func compileCmd(ctx context.Context, args []string, out IO) error {
 	)
 	fs := flag.NewFlagSet("compile", flag.ContinueOnError)
 	fs.SetOutput(out.Stderr)
-	fs.StringVar(&dir, "capsule-dir", "", "capsule directory (default <pkg>/.flakesmith)")
+	fs.StringVar(&dir, "capsule-dir", "", "capsule directory (default <pkg>/.go-flake-hunter)")
 	fs.StringVar(&pkg, "pkg", "", "package directory (default: the directory the capsule recorded)")
 	fs.BoolVar(&print, "print", false, "print to stdout without writing to disk")
 	fs.BoolVar(&dryRun, "dry-run", false, "only say what would be written")
@@ -58,7 +58,7 @@ func compileCmd(ctx context.Context, args []string, out IO) error {
 	// A cross-binary witness (#6) cannot become a single regression test file:
 	// its reproduction is two `go test` processes. Refusing with the command
 	// attached turns the exit 5 into a copy-pasteable action instead of a dead
-	// end; the scaffold from `flakesmith init` runs that command as the gate.
+	// end; the scaffold from `go-flake-hunter init` runs that command as the gate.
 	if c.Witness.CrossBinary {
 		return domain.Wrap(domain.ErrUnsupportedTest,
 			"this witness spans two test binaries and cannot be a regression test file; it reproduces with: %s",
@@ -67,7 +67,7 @@ func compileCmd(ctx context.Context, args []string, out IO) error {
 
 	// The capsule is portable: if it does not carry its own directory, find
 	// the package hosting the victim. Otherwise compile called with
-	// `--capsule-dir /abs/path` would look for tests in cwd (flakesmith's repo).
+	// `--capsule-dir /abs/path` would look for tests in cwd (go-flake-hunter's repo).
 	pkgDir, err = resolvePkgDir(pkgDir, c)
 	if err != nil {
 		return err
@@ -192,9 +192,9 @@ func firstBuildLine(s string) string {
 // the two directories that matter: where the JSON lives and which package the
 // capsule is about.
 //
-// They are not the same directory. `replay .flakesmith/fs_x.json` used to take
+// They are not the same directory. `replay .go-flake-hunter/gfh_x.json` used to take
 // the file's parent as the package, then look for its store inside that parent
-// (<pkg>/.flakesmith/.flakesmith) and report "capsule not found" for a file
+// (<pkg>/.go-flake-hunter/.go-flake-hunter) and report "capsule not found" for a file
 // sitting right there.
 func resolveCapsule(args []string, dirFlag, pkgFlag string) (id, storeDir, pkgDir string, err error) {
 	pkg := pkgOrDefault(pkgFlag, ".")
@@ -213,7 +213,7 @@ func resolveCapsule(args []string, dirFlag, pkgFlag string) (id, storeDir, pkgDi
 			id, pkgDir, err = newestIn(capsuleDir(dirFlag, arg), arg)
 			return id, capsuleDir(dirFlag, pkgDir), pkgDir, err
 		}
-		// Bare file name: whatever `ls .flakesmith` prints gets pasted.
+		// Bare file name: whatever `ls .go-flake-hunter` prints gets pasted.
 		// The .json extension is not part of the id; look it up as an id. If no
 		// directory is given, the store comes from --capsule-dir, not from cwd.
 		if filepath.Ext(arg) == ".json" {
@@ -278,7 +278,7 @@ func newestIn(dir, pkgDir string) (string, string, error) {
 		return "", "", domain.Wrap(domain.ErrUsage, "%s", err)
 	}
 	if len(ids) == 0 {
-		return "", "", domain.Wrap(domain.ErrUsage, "no capsule in %s; run flakesmith hunt first", dir)
+		return "", "", domain.Wrap(domain.ErrUsage, "no capsule in %s; run go-flake-hunter hunt first", dir)
 	}
 	return ids[0], pkgDir, nil
 }
@@ -293,5 +293,5 @@ func stemExt(path string) string {
 
 // sourceFile names the file the victim lives in; the generated file is named
 // after it. The victim is passed so the name follows the test, not directory
-// order, and so flakesmith's own output is never picked again.
+// order, and so go-flake-hunter's own output is never picked again.
 func sourceFile(dir, victim string) string { return targetSourceFile(dir, victim) }

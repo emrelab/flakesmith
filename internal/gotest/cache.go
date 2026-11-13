@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/emrelab/flakesmith/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
 )
 
 // Cache memoizes Runner.Run by spec.

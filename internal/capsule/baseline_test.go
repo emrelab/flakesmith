@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/emrelab/flakesmith/internal/capsule"
-	"github.com/emrelab/flakesmith/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/capsule"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
 )
 
 // The baseline is sorted and deduplicated when written to disk: otherwise the
@@ -16,7 +16,7 @@ import (
 // becomes noise.
 func TestWriteBaselineSortsAndDedupes(t *testing.T) {
 	path := filepath.Join(t.TempDir(), domain.CapsuleDir, capsule.BaselineFileName)
-	if err := capsule.WriteBaseline(path, []string{"fs_ccc", "fs_aaa", "fs_ccc", ""}); err != nil {
+	if err := capsule.WriteBaseline(path, []string{"gfh_ccc", "gfh_aaa", "gfh_ccc", ""}); err != nil {
 		t.Fatalf("could not write: %v", err)
 	}
 	data, err := os.ReadFile(path)
@@ -30,7 +30,7 @@ func TestWriteBaselineSortsAndDedupes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not read back: %v", err)
 	}
-	want := []string{"fs_aaa", "fs_ccc"}
+	want := []string{"gfh_aaa", "gfh_ccc"}
 	if len(b.IDs) != len(want) {
 		t.Fatalf("ids = %v, want %v", b.IDs, want)
 	}
@@ -68,7 +68,7 @@ func TestLoadBaselineRejectsBrokenFiles(t *testing.T) {
 	}
 
 	oldSchema := filepath.Join(dir, "old.json")
-	if err := os.WriteFile(oldSchema, []byte(`{"schema":"flakesmith/baseline/v0","ids":[]}`), 0o644); err != nil {
+	if err := os.WriteFile(oldSchema, []byte(`{"schema":"go-flake-hunter/baseline/v0","ids":[]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := capsule.LoadBaseline(oldSchema); !errors.Is(err, domain.ErrUsage) {
@@ -78,7 +78,7 @@ func TestLoadBaselineRejectsBrokenFiles(t *testing.T) {
 
 func TestLegacyBaselineRequiresExplicitRegeneration(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "baseline.json")
-	if err := os.WriteFile(path, []byte(`{"schema":"flakesmith/baseline/v1","ids":["fs_old"]}`), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(`{"schema":"flakesmith/baseline/v1","ids":["gfh_old"]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	_, err := capsule.LoadBaseline(path)

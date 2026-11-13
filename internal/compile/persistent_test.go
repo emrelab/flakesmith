@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/emrelab/flakesmith/internal/compile"
-	"github.com/emrelab/flakesmith/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/compile"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
 )
 
 func capsule() domain.Capsule {
@@ -17,7 +17,7 @@ func capsule() domain.Capsule {
 	polluter := domain.TestID{Package: "fixture/orderbasic", Name: "TestPolluter"}
 	return domain.Capsule{
 		Schema: domain.SchemaVersion,
-		ID:     "fs_5112091d7096",
+		ID:     "gfh_5112091d7096",
 		Kind:   domain.KindOrder,
 		Target: domain.Target{Package: "fixture/orderbasic", RelDir: ".", Victim: "TestVictim"},
 		Witness: domain.Witness{
@@ -39,7 +39,7 @@ func TestRenderIsValidGo(t *testing.T) {
 	}
 	s := string(src)
 	for _, want := range []string{
-		"//go:build flakesmith",
+		"//go:build goflakehunter",
 		"package orderbasic",
 		"func TestFlakeRegression_TestVictim(t *testing.T)",
 		`t.Run("polluter/TestPolluter", TestPolluter)`,
@@ -63,7 +63,7 @@ func fixtureDir(t *testing.T) string {
 		t.Fatal(err)
 	}
 	dst := t.TempDir()
-	// copyFixture skips flakesmith's own output: a leftover from a manual run
+	// copyFixture skips go-flake-hunter's own output: a leftover from a manual run
 	// would redeclare the regression function inside the copy and turn the
 	// test red for a reason that has nothing to do with the code.
 	err = filepath.WalkDir(src, func(path string, d os.DirEntry, err error) error {
@@ -112,7 +112,7 @@ func TestGeneratedTestCompiles(t *testing.T) {
 	}
 	defer func() { _ = os.Remove(path) }()
 
-	cmd := exec.Command("go", "vet", "-tags", "flakesmith", ".")
+	cmd := exec.Command("go", "vet", "-tags", "goflakehunter", ".")
 	cmd.Dir = dir
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("go vet failed: %v\n%s", err, out)
@@ -128,7 +128,7 @@ func TestGeneratedTestIsExcludedWithoutTag(t *testing.T) {
 	}
 
 	// Write with the real name: this also verifies the naming rule.
-	path := filepath.Join(dir, "checkout_flakesmith_test.go")
+	path := filepath.Join(dir, "checkout_goflakehunter_test.go")
 	if err := os.WriteFile(path, src, 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -150,12 +150,12 @@ func TestGeneratedTestIsExcludedWithoutTag(t *testing.T) {
 
 func TestWriteRefusesForeignFile(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "order_TestVictim_flakesmith_test.go")
+	path := filepath.Join(dir, "order_TestVictim_goflakehunter_test.go")
 	if err := os.WriteFile(path, []byte("package p\n// handwritten by a user\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := compile.Write(capsule(), "orderbasic", compile.Options{Dir: dir, SourceFile: "order.go", Write: true}); err == nil {
-		t.Fatal("a file flakesmith did not generate must be preserved")
+		t.Fatal("a file go-flake-hunter did not generate must be preserved")
 	}
 }
 
@@ -193,7 +193,7 @@ func TestWriteIsIdempotent(t *testing.T) {
 
 func TestCommandLine(t *testing.T) {
 	got := compile.CommandLine(capsule())
-	if !strings.Contains(got, "-tags flakesmith") || !strings.Contains(got, "TestFlakeRegression_TestVictim") {
+	if !strings.Contains(got, "-tags goflakehunter") || !strings.Contains(got, "TestFlakeRegression_TestVictim") {
 		t.Errorf("incomplete command: %s", got)
 	}
 }
@@ -213,7 +213,7 @@ func TestRenderIsKindSpecific(t *testing.T) {
 		{
 			name: "repeat",
 			c: domain.Capsule{
-				ID:     "fs_r",
+				ID:     "gfh_r",
 				Kind:   domain.KindRepeat,
 				Target: domain.Target{Victim: "TestAccumulates"},
 				Witness: domain.Witness{
@@ -228,7 +228,7 @@ func TestRenderIsKindSpecific(t *testing.T) {
 		{
 			name: "parallel",
 			c: domain.Capsule{
-				ID:     "fs_p",
+				ID:     "gfh_p",
 				Kind:   domain.KindParallel,
 				Target: domain.Target{Victim: "TestBeta"},
 				Witness: domain.Witness{
@@ -249,7 +249,7 @@ func TestRenderIsKindSpecific(t *testing.T) {
 		{
 			name: "env",
 			c: domain.Capsule{
-				ID:     "fs_e",
+				ID:     "gfh_e",
 				Kind:   domain.KindEnv,
 				Target: domain.Target{Victim: "TestEnv"},
 				Witness: domain.Witness{
@@ -337,7 +337,7 @@ func TestRaceWitnessCarriesRaceIntoCommandAndVerify(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(src), "go test -race . -tags flakesmith") {
+	if !strings.Contains(string(src), "go test -race . -tags goflakehunter") {
 		t.Errorf("the template's \"Reproduce\" line does not carry -race:\n%s", src)
 	}
 }
@@ -379,7 +379,7 @@ func TestWriteRetainsLegacyVictimWithoutOverwritingSibling(t *testing.T) {
 		t.Fatalf("legacy lost: %v", err)
 	}
 	// Updating the original must reuse its old path, avoiding duplicate declarations.
-	first.ID = "fs_updated"
+	first.ID = "gfh_updated"
 	got, err := compile.Write(first, "orderbasic", opt)
 	if err != nil || got != legacy {
 		t.Fatalf("legacy update: %s %v", got, err)

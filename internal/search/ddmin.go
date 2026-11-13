@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/emrelab/flakesmith/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
 )
 
 // Predicate answers "does this subset still reproduce the failure?".

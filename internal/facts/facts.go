@@ -88,7 +88,7 @@ type PkgFacts struct {
 	// invisible — static scope, same as FileCalls).
 	//
 	// The point is naming, not fixing: a bubble provides a virtual clock,
-	// but it does not isolate external I/O or make arbitrary code deterministic. flakesmith never synthesizes bubbles around
+	// but it does not isolate external I/O or make arbitrary code deterministic. go-flake-hunter never synthesizes bubbles around
 	// someone else's test: that would fabricate determinism.
 	TestSynctest map[string]bool
 

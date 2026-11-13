@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/emrelab/flakesmith/internal/domain"
-	"github.com/emrelab/flakesmith/internal/search"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/search"
 )
 
 // hasAll is the interaction predicate: only subsets carrying every listed test

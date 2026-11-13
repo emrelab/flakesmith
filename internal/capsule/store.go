@@ -10,10 +10,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/emrelab/flakesmith/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
 )
 
-// Store is a directory of capsule JSON files (repo/.flakesmith by default).
+// Store is a directory of capsule JSON files (repo/.go-flake-hunter by default).
 type Store struct{ Dir string }
 
 // NewStore binds a store to a directory; it does not create anything.
@@ -74,7 +74,7 @@ func (s Store) Read(id string) (domain.Capsule, error) {
 	if err := json.Unmarshal(data, &c); err != nil {
 		return c, fmt.Errorf("%w: capsule is corrupt (%s): %v", domain.ErrInternal, id, err)
 	}
-	if c.Schema != domain.SchemaVersion {
+	if !domain.ReadableSchema(c.Schema) {
 		return c, fmt.Errorf("capsule schema version not supported: %s (expected %s)", c.Schema, domain.SchemaVersion)
 	}
 	// The class decides which regression body compiles and which report

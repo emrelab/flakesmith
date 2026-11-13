@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/emrelab/flakesmith/internal/domain"
-	"github.com/emrelab/flakesmith/internal/gotest"
-	"github.com/emrelab/flakesmith/internal/harness"
-	"github.com/emrelab/flakesmith/internal/policy"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/gotest"
+	"github.com/emrelab/go-flake-hunter/internal/harness"
+	"github.com/emrelab/go-flake-hunter/internal/policy"
 )
 
 // fixture copies a fixture module into a temp dir.

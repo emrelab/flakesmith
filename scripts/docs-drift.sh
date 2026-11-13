@@ -19,11 +19,11 @@ fi
 
 # 2. The action example must pin a tag that actually resolves.
 # README only: it is the canonical example, and prose elsewhere may quote the
-# ref shape (`emrelab/flakesmith@<ref>`) without claiming anything is pinned.
-ref=$(grep -hoE 'uses: *emrelab/flakesmith@[^ #]+' "$README" \
+# ref shape (`emrelab/go-flake-hunter@<ref>`) without claiming anything is pinned.
+ref=$(grep -hoE 'uses: *emrelab/go-flake-hunter@[^ #]+' "$README" \
       | head -1 | sed 's/.*@//')
 if [ -z "$ref" ]; then
-  err "no 'uses: emrelab/flakesmith@<ref>' example found in $README"
+  err "no 'uses: emrelab/go-flake-hunter@<ref>' example found in $README"
 elif [ "$ref" = "main" ] || [ "$ref" = "master" ]; then
   err "the action example pins the mutable branch '$ref'"
 elif ! git rev-parse -q --verify "refs/tags/$ref" >/dev/null; then
@@ -31,11 +31,11 @@ elif ! git rev-parse -q --verify "refs/tags/$ref" >/dev/null; then
 fi
 
 # 3. The sample hunt output must be the output the binary produces.
-[ -x ./flakesmith ] || { echo "docs-drift: build first (make build)" >&2; exit 2; }
+[ -x ./go-flake-hunter ] || { echo "docs-drift: build first (make build)" >&2; exit 2; }
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
-( cd testdata/fixtures/order-basic && "$root/flakesmith" hunt ./... ) \
+( cd testdata/fixtures/order-basic && "$root/go-flake-hunter" hunt ./... ) \
   > "$tmp/actual.raw" 2>&1
 # Only the confirmed block; the run also reports the tests it cleared.
 sed -n '/^flake found: TestVictim/,/status .*: confirmed/p' "$tmp/actual.raw" \
@@ -53,7 +53,7 @@ if [ ! -s "$tmp/actual" ] || [ ! -s "$tmp/doc" ]; then
 else
   norm() {
     sed -E \
-      -e 's/fs_[0-9a-f]{12}/fs_ID/g' \
+      -e 's/gfh_[0-9a-f]{12}/gfh_ID/g' \
       -e 's/^[[:space:]]+//' -e 's/[[:space:]]+: /: /' \
       -e 's/^run: .*/run: N\/N/' \
       -e 's/^Wilson 95%: .*/Wilson 95%: X/' \

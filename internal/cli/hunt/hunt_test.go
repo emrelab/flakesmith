@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/emrelab/flakesmith/internal/cli"
-	"github.com/emrelab/flakesmith/internal/clitest"
-	"github.com/emrelab/flakesmith/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/cli"
+	"github.com/emrelab/go-flake-hunter/internal/clitest"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
 )
 
 // End-to-end: hunt runs on a real fixture and writes a capsule.
@@ -122,7 +122,7 @@ func TestHuntBudgetWritesPartialCapsule(t *testing.T) {
 	}
 
 	// After a cancel/interruption no witness file may remain in the package.
-	leftovers, _ := filepath.Glob(filepath.Join(dir, "zz_flakesmith_witness_*"))
+	leftovers, _ := filepath.Glob(filepath.Join(dir, "zz_goflakehunter_witness_*"))
 	if len(leftovers) > 0 {
 		t.Errorf("witness files left behind: %v", leftovers)
 	}
@@ -273,7 +273,7 @@ func TestHuntSARIFSideFileCarriesThePartialCapsule(t *testing.T) {
 		t.Skip("integration test")
 	}
 	dir := clitest.FixtureDir(t, "order-basic")
-	side := filepath.Join(t.TempDir(), "flakesmith.sarif")
+	side := filepath.Join(t.TempDir(), "go-flake-hunter.sarif")
 	code, _, errOut := clitest.Run("hunt", dir, "--sarif", side,
 		"-capsule-dir", filepath.Join(t.TempDir(), "c"), "--budget", "1")
 	if code != domain.ExitBudget {

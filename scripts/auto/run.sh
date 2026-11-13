@@ -6,7 +6,7 @@
 # There is no timer here on purpose: most of this repo's open issues need a
 # design decision, and a timer with a finite queue eventually invents work. This
 # script is the supervised one-shot path (docs/AUTO.md §10 "Manual"); the
-# scheduled drain lives in the Hermes cron job `flakesmith-oto-issue` and obeys
+# scheduled drain lives in the Hermes cron job `go-flake-hunter-oto-issue` and obeys
 # the same rulebook. A human arms both; neither runs past the queue.
 #
 # --yolo is required: an unattended run cannot answer approval prompts. That is

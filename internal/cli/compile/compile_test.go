@@ -2,15 +2,15 @@ package clicompile
 
 import (
 	"bytes"
-	"github.com/emrelab/flakesmith/internal/capsule"
+	"github.com/emrelab/go-flake-hunter/internal/capsule"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/emrelab/flakesmith/internal/clitest"
-	"github.com/emrelab/flakesmith/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/clitest"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
 )
 
 // compile --verify proves the generated artifact really goes red.
@@ -81,7 +81,7 @@ func TestCompileVerifyReproducesEachClass(t *testing.T) {
 // touching the disk dirties the working tree while the user only wants a look.
 // The third is called with an absolute --capsule-dir: if the capsule does not
 // carry its own directory, the target package must come from the capsule, not
-// from the process cwd — otherwise the test lands in flakesmith's own repo.
+// from the process cwd — otherwise the test lands in go-flake-hunter's own repo.
 func TestCompilePrintDryRunAndWriteTarget(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test")
@@ -143,7 +143,7 @@ func TestCompilePrintDryRunAndWriteTarget(t *testing.T) {
 	}
 }
 
-// Positional directory: `compile <package>` and `ls .flakesmith` output use the
+// Positional directory: `compile <package>` and `ls .go-flake-hunter` output use the
 // same gate. With a directory argument the store is searched inside it.
 func TestCompilePositionalPackageDir(t *testing.T) {
 	if testing.Short() {
@@ -222,7 +222,7 @@ func TestCompilePreservesMultipleVictimsInOneSource(t *testing.T) {
 	if err := os.WriteFile(path, src, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.Command("go", "test", "-tags", "flakesmith", "-run", "^TestFlakeRegression_", "-count=1", ".")
+	cmd := exec.Command("go", "test", "-tags", "goflakehunter", "-run", "^TestFlakeRegression_", "-count=1", ".")
 	cmd.Dir = dir
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("regressions after fix: %v\n%s", err, out)

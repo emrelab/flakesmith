@@ -11,16 +11,16 @@ import (
 
 func TestReplayScaffoldGatePreservesExitContract(t *testing.T) {
 	dir := t.TempDir()
-	bin := filepath.Join(dir, "flakesmith-bin")
+	bin := filepath.Join(dir, "go-flake-hunter-bin")
 	if err := os.Mkdir(bin, 0700); err != nil {
 		t.Fatal(err)
 	}
-	for path, script := range map[string]string{filepath.Join(bin, "flakesmith"): "#!/bin/sh\nexit \"$REPLAY_STATUS\"\n", filepath.Join(bin, "go"): "#!/bin/sh\nexit 0\n"} {
+	for path, script := range map[string]string{filepath.Join(bin, "go-flake-hunter"): "#!/bin/sh\nexit \"$REPLAY_STATUS\"\n", filepath.Join(bin, "go"): "#!/bin/sh\nexit 0\n"} {
 		if err := os.WriteFile(path, []byte(script), 0700); err != nil {
 			t.Fatal(err)
 		}
 	}
-	gate := replayGate(".flakesmith/fs_123.json")
+	gate := replayGate(".go-flake-hunter/gfh_123.json")
 	_, body, ok := strings.Cut(gate, "        run: |\n")
 	if !ok {
 		t.Fatal("no run block")

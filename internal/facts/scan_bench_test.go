@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/emrelab/flakesmith/internal/facts"
+	"github.com/emrelab/go-flake-hunter/internal/facts"
 )
 
 // synthPkg writes a package of `files` generated _test.go files into a temp
@@ -26,7 +26,7 @@ func synthPkg(b *testing.B, files int) string {
 			fmt.Fprintf(&sb, `
 func TestGen_%03d_%d(t *testing.T) {
 	counter%03d++
-	if os.Getenv("FLAKESMITH_BENCH") == "on" {
+	if os.Getenv("GO_FLAKE_HUNTER_BENCH") == "on" {
 		t.Parallel()
 	}
 	_, _ = os.CreateTemp(t.TempDir(), "state")

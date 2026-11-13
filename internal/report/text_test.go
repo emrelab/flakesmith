@@ -6,13 +6,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/emrelab/flakesmith/internal/domain"
-	"github.com/emrelab/flakesmith/internal/report"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/report"
 )
 
 func sample() domain.Capsule {
 	return domain.Capsule{
-		ID:   "fs_abc123456789",
+		ID:   "gfh_abc123456789",
 		Kind: domain.KindOrder,
 		Witness: domain.Witness{
 			Kind:      domain.KindOrder,
@@ -36,7 +36,7 @@ func TestTextReportsTheEssentials(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := b.String()
-	for _, want := range []string{"flake found", "TestVictim", "order", "TestPolluter", "5/5", "fs_abc123456789"} {
+	for _, want := range []string{"flake found", "TestVictim", "order", "TestPolluter", "5/5", "gfh_abc123456789"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("%q missing from output: %s", want, out)
 		}

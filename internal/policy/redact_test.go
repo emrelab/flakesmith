@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/emrelab/flakesmith/internal/policy"
+	"github.com/emrelab/go-flake-hunter/internal/policy"
 )
 
 // The value must never leak into output under any circumstance: the capsule is committed to the repo.

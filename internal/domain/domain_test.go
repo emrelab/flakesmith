@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/emrelab/flakesmith/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
 )
 
 func TestRunSpecWithDefaults(t *testing.T) {
@@ -72,7 +72,7 @@ func TestExitCodeSurvivesWrap(t *testing.T) {
 func TestNames(t *testing.T) {
 	// Files prefixed with "_" or "." are not compiled; the temporary harness must start with "zz_".
 	got := domain.WitnessFileName("0")
-	if got != "zz_flakesmith_witness_0_test.go" {
+	if got != "zz_goflakehunter_witness_0_test.go" {
 		t.Errorf("WitnessFileName = %q", got)
 	}
 	if !domain.IsWitnessFileName(got) {
@@ -81,10 +81,10 @@ func TestNames(t *testing.T) {
 	if domain.IsWitnessFileName("checkout_test.go") {
 		t.Error("a user file was mistaken for a harness")
 	}
-	if p := domain.PersistentFileName("checkout_test.go"); p != "checkout_flakesmith_test.go" {
+	if p := domain.PersistentFileName("checkout_test.go"); p != "checkout_goflakehunter_test.go" {
 		t.Errorf("PersistentFileName = %q", p)
 	}
-	if p := domain.PersistentFileName("order.go"); p != "order_flakesmith_test.go" {
+	if p := domain.PersistentFileName("order.go"); p != "order_goflakehunter_test.go" {
 		t.Errorf("PersistentFileName(.go) = %q", p)
 	}
 	if f := domain.PersistentFuncName("TestCheckout"); f != "TestFlakeRegression_TestCheckout" {

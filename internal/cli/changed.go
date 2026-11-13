@@ -8,8 +8,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/emrelab/flakesmith/internal/domain"
-	"github.com/emrelab/flakesmith/internal/gotest"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/gotest"
 )
 
 // defaultBase is what `--changed` measures against when the user names nothing:

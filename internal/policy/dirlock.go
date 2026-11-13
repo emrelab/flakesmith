@@ -19,7 +19,7 @@ import (
 //     directory meanwhile, and neither may a sibling probe.
 //  2. Cross-process: `go test ./...` runs one binary per package, so two of
 //     this project's own tests can hit the same fixture directory, and a user
-//     can run two `flakesmith hunt` invocations. Without an OS lock the second
+//     can run two `go-flake-hunter hunt` invocations. Without an OS lock the second
 //     one lists tests while the first has a witness file on disk and sees a
 //     test that does not exist.
 //
@@ -168,7 +168,7 @@ func canonical(dir string) string {
 
 func lockPath(key string) string {
 	sum := sha256.Sum256([]byte(key))
-	return filepath.Join(os.TempDir(), "flakesmith-locks", hex.EncodeToString(sum[:16])+".lock")
+	return filepath.Join(os.TempDir(), "go-flake-hunter-locks", hex.EncodeToString(sum[:16])+".lock")
 }
 
 // LockedDirs acquires a sequence's directories in canonical order to prevent

@@ -11,8 +11,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/emrelab/flakesmith/internal/domain"
-	"github.com/emrelab/flakesmith/internal/facts"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/facts"
 )
 
 // Build assembles the evidence for a witness.

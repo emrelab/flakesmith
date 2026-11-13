@@ -4,12 +4,12 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/emrelab/flakesmith/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
 )
 
 // cleanupWitnesses removes witness files left by a killed run.
 //
-// A stray zz_flakesmith_witness_* file makes every later `go build` in that
+// A stray zz_goflakehunter_witness_* file makes every later `go build` in that
 // package fail with test errors that look like the user's fault, so this runs
 // before anything else touches the directory.
 func cleanupWitnesses(dir string) ([]string, error) {

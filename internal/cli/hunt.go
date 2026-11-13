@@ -12,15 +12,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/emrelab/flakesmith/internal/capsule"
-	"github.com/emrelab/flakesmith/internal/compile"
-	"github.com/emrelab/flakesmith/internal/domain"
-	"github.com/emrelab/flakesmith/internal/evidence"
-	"github.com/emrelab/flakesmith/internal/facts"
-	"github.com/emrelab/flakesmith/internal/gotest"
-	"github.com/emrelab/flakesmith/internal/policy"
-	"github.com/emrelab/flakesmith/internal/probe"
-	"github.com/emrelab/flakesmith/internal/report"
+	"github.com/emrelab/go-flake-hunter/internal/capsule"
+	"github.com/emrelab/go-flake-hunter/internal/compile"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/evidence"
+	"github.com/emrelab/go-flake-hunter/internal/facts"
+	"github.com/emrelab/go-flake-hunter/internal/gotest"
+	"github.com/emrelab/go-flake-hunter/internal/policy"
+	"github.com/emrelab/go-flake-hunter/internal/probe"
+	"github.com/emrelab/go-flake-hunter/internal/report"
 )
 
 // huntOptions are the flags shared by `hunt` and `repro`.
@@ -52,7 +52,7 @@ func (o *huntOptions) addFlags(fs *flag.FlagSet) {
 	fs.StringVar(&o.format, "format", "text", "output format: text|json|markdown|sarif")
 	fs.StringVar(&o.sarifPath, "sarif", "", "also write a SARIF 2.1.0 document to this file (any --format)")
 	fs.IntVar(&o.repeat, "repeat", probe.DefaultRepeatCount, "repeat count for -count")
-	fs.StringVar(&o.dir, "capsule-dir", "", "capsule directory (default <pkg>/.flakesmith)")
+	fs.StringVar(&o.dir, "capsule-dir", "", "capsule directory (default <pkg>/.go-flake-hunter)")
 	fs.IntVar(&o.seeds, "seeds", 0, "shuffle seed count (0 = default 12)")
 	fs.DurationVar(&o.timeout, "timeout", policy.DefaultMaxWall, "total time budget (0 = default 5m)")
 	fs.IntVar(&o.budget, "budget", policy.DefaultMaxRuns, "total go test run budget (0 = default 1000)")
@@ -186,7 +186,7 @@ func (s *scanner) flush() error {
 }
 
 // relDir is the package path as a command printed in the capsule can use it:
-// relative to where the user invoked flakesmith. Target.RelDir used to be an
+// relative to where the user invoked go-flake-hunter. Target.RelDir used to be an
 // absolute path, so a capsule committed to a PR carried /Users/<name>/... and
 // the reproduce command only worked on the machine that produced it.
 func (s *scanner) relDir(dir string) string {
@@ -227,7 +227,7 @@ func (s *scanner) pkg(ctx context.Context, pkgArg string) error {
 	//
 	// The lock is REQUIRED: the install contract says "the directory is
 	// locked while a witness is on disk". An unlocked cleanup would delete the
-	// LIVE witness of another flakesmith running on the same package; that run
+	// LIVE witness of another go-flake-hunter running on the same package; that run
 	// would later report "0/5 failed". Discover runs under the same lock: a
 	// witness installed in between would enter the list as a user-owned test.
 	lockCtx, unlock, lerr := policy.Locked(ctx, dir)
@@ -260,7 +260,7 @@ func (s *scanner) pkg(ctx context.Context, pkgArg string) error {
 	}
 
 	if len(pkgFacts.ExternalDependencies) > 0 {
-		fmt.Fprintf(s.out.Stderr, "%s: external dependencies (static, package-wide): %s; clock/network/database control is outside flakesmith; reproduction probes still run\n", pkgArg, strings.Join(pkgFacts.ExternalDependencies, "; "))
+		fmt.Fprintf(s.out.Stderr, "%s: external dependencies (static, package-wide): %s; clock/network/database control is outside go-flake-hunter; reproduction probes still run\n", pkgArg, strings.Join(pkgFacts.ExternalDependencies, "; "))
 	}
 	for _, t := range tests {
 		res, err := s.registry.Run(ctx, probe.Target{Test: t, Dir: dir, Facts: pkgFacts}, s.runner)
@@ -305,7 +305,7 @@ func (s *scanner) pkg(ctx context.Context, pkgArg string) error {
 		c.Note = note
 		if c.Status == domain.StatusSuspected {
 			c.Note = "partial reproduction; not confirmed and excluded from the CI flake gate and baseline"
-			c.Repro.Command = fmt.Sprintf("flakesmith replay %s --pkg %s --capsule-dir %s -n 10", c.ID, quoteArg(dir), quoteArg(capsuleDir(s.o.dir, dir)))
+			c.Repro.Command = fmt.Sprintf("go-flake-hunter replay %s --pkg %s --capsule-dir %s -n 10", c.ID, quoteArg(dir), quoteArg(capsuleDir(s.o.dir, dir)))
 		}
 		store := capsule.NewStore(capsuleDir(s.o.dir, dir))
 		path, err := store.Write(c)
@@ -412,7 +412,7 @@ func hunt(ctx context.Context, args []string, out IO) error {
 	fs.StringVar(&base, "base", "", "change base (default origin/main, else HEAD~1)")
 	fs.StringVar(&baselinePath, "baseline", "", "known flake list (gate goes red only on NEW flakes)")
 	fs.BoolVar(&writeBaseline, "write-baseline", false,
-		"write the ids found by this run to the baseline file (default .flakesmith/baseline.json)")
+		"write the ids found by this run to the baseline file (default .go-flake-hunter/baseline.json)")
 	if err := parseFlags(fs, args); err != nil {
 		return err
 	}
@@ -849,15 +849,15 @@ func takesValue(fs *flag.FlagSet, name string) bool {
 
 // targetSourceFile picks the file the regression test is named after: the file
 // that actually declares the victim, so `compile` writing TestVictim's test
-// lands in checkout_flakesmith_test.go rather than next to an unrelated file.
+// lands in checkout_goflakehunter_test.go rather than next to an unrelated file.
 //
-// flakesmith's own output is never a candidate. Naming a generated file again
-// compounds the suffix (checkout_flakesmith_flakesmith_test.go) and, worse,
+// go-flake-hunter's own output is never a candidate. Naming a generated file again
+// compounds the suffix (checkout_go-flake-hunter_goflakehunter_test.go) and, worse,
 // leaves two files declaring the same function — the package stops compiling.
 func targetSourceFile(dir, victim string) string {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return "flakesmith"
+		return "goflakehunter"
 	}
 	fallback := ""
 	for _, e := range entries {
@@ -878,7 +878,7 @@ func targetSourceFile(dir, victim string) string {
 	if fallback != "" {
 		return fallback
 	}
-	return "flakesmith"
+	return "goflakehunter"
 }
 
 func capsuleDir(flagValue, pkgDir string) string {

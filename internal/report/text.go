@@ -7,7 +7,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/emrelab/flakesmith/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
 )
 
 // Text writes the human-readable summary of a found witness.

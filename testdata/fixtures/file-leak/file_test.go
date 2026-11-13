@@ -8,7 +8,7 @@ import (
 
 // Expected: KindOrder + Evidence.FilesTouched populated.
 // Polluter writes to a fixed path (no t.TempDir); victim expects the file to be absent.
-func fixturePath() string { return filepath.Join(os.TempDir(), "flakesmith-fixture-leak.txt") }
+func fixturePath() string { return filepath.Join(os.TempDir(), "go-flake-hunter-fixture-leak.txt") }
 
 func TestPolluterWritesFile(t *testing.T) {
 	if err := os.WriteFile(fixturePath(), []byte("dirty"), 0o644); err != nil {

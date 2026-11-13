@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/emrelab/flakesmith/internal/capsule"
-	"github.com/emrelab/flakesmith/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/capsule"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
 )
 
 func witness() domain.Witness {
@@ -29,7 +29,7 @@ func TestIDIsStable(t *testing.T) {
 	if a != b {
 		t.Fatalf("ID changed: %s != %s", a, b)
 	}
-	if len(a) != len("fs_")+12 {
+	if len(a) != len("gfh_")+12 {
 		t.Errorf("ID format: %q", a)
 	}
 }
@@ -76,11 +76,11 @@ func TestIDIgnoresPolluterOrder(t *testing.T) {
 
 func TestStoreRoundTrip(t *testing.T) {
 	dir := t.TempDir()
-	store := capsule.NewStore(filepath.Join(dir, ".flakesmith"))
+	store := capsule.NewStore(filepath.Join(dir, ".go-flake-hunter"))
 
 	c := domain.Capsule{
 		Schema:    domain.SchemaVersion,
-		ID:        "fs_test123456",
+		ID:        "gfh_test123456",
 		CreatedAt: time.Now().Truncate(time.Second),
 		Kind:      domain.KindOrder,
 		Witness:   witness(),
@@ -109,12 +109,32 @@ func TestStoreRoundTrip(t *testing.T) {
 func TestStoreRejectsUnknownSchema(t *testing.T) {
 	dir := t.TempDir()
 	store := capsule.NewStore(dir)
-	if err := os.WriteFile(filepath.Join(dir, "fs_old.json"),
-		[]byte(`{"schema":"flakesmith/v0","id":"fs_old"}`), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "gfh_old.json"),
+		[]byte(`{"schema":"go-flake-hunter/v0","id":"gfh_old"}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Read("fs_old"); err == nil {
+	if _, err := store.Read("gfh_old"); err == nil {
 		t.Fatal("the old schema must be rejected")
+	}
+}
+
+// A capsule written before the rename keeps its id and stays readable: the
+// rename changed the schema string, not the document, so refusing it would
+// throw away evidence that is still true.
+func TestStoreReadsPreRenameSchema(t *testing.T) {
+	dir := t.TempDir()
+	store := capsule.NewStore(dir)
+	body := `{"schema":"flakesmith/v1","id":"gfh_legacy","kind":"order",` +
+		`"status":"confirmed","witness":{"victim":{"package":"p","name":"TestV"}}}`
+	if err := os.WriteFile(filepath.Join(dir, "gfh_legacy.json"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := store.Read("gfh_legacy")
+	if err != nil {
+		t.Fatalf("a pre-rename capsule must still load: %v", err)
+	}
+	if got.ID != "gfh_legacy" || got.Schema != domain.LegacySchema {
+		t.Errorf("read back id=%q schema=%q", got.ID, got.Schema)
 	}
 }
 
@@ -126,7 +146,7 @@ func TestStoreListAndMissing(t *testing.T) {
 	if err != nil || len(ids) != 0 {
 		t.Fatalf("empty dir: ids=%v err=%v", ids, err)
 	}
-	if _, err := store.Read("fs_missing"); err == nil {
+	if _, err := store.Read("gfh_missing"); err == nil {
 		t.Fatal("a missing capsule must return an error")
 	}
 }
@@ -135,7 +155,7 @@ func TestStoreListAndMissing(t *testing.T) {
 func TestStoreWriteIsAtomic(t *testing.T) {
 	dir := t.TempDir()
 	store := capsule.NewStore(dir)
-	if _, err := store.Write(domain.Capsule{Schema: domain.SchemaVersion, ID: "fs_a"}); err != nil {
+	if _, err := store.Write(domain.Capsule{Schema: domain.SchemaVersion, ID: "gfh_a"}); err != nil {
 		t.Fatal(err)
 	}
 	entries, err := os.ReadDir(dir)
@@ -161,7 +181,7 @@ func TestReadRejectsUnknownKind(t *testing.T) {
 	store := capsule.NewStore(dir)
 	bad := domain.Capsule{
 		Schema: domain.SchemaVersion,
-		ID:     "fs_bad",
+		ID:     "gfh_bad",
 		Kind:   domain.Kind("wobble"),
 		Target: domain.Target{Package: "example.com/m", Victim: "TestX"},
 		Status: domain.StatusConfirmed,
@@ -169,7 +189,7 @@ func TestReadRejectsUnknownKind(t *testing.T) {
 	if _, err := store.Write(bad); err != nil {
 		t.Fatal(err)
 	}
-	_, err := store.Read("fs_bad")
+	_, err := store.Read("gfh_bad")
 	if !errors.Is(err, domain.ErrUsage) {
 		t.Fatalf("want ErrUsage, got %v", err)
 	}
@@ -178,12 +198,12 @@ func TestReadRejectsUnknownKind(t *testing.T) {
 	}
 
 	partial := bad
-	partial.ID = "fs_partial"
+	partial.ID = "gfh_partial"
 	partial.Status = domain.StatusPartial
 	if _, err := store.Write(partial); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Read("fs_partial"); err != nil {
+	if _, err := store.Read("gfh_partial"); err != nil {
 		t.Errorf("a partial capsule has no class by design: %v", err)
 	}
 }

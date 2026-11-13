@@ -19,7 +19,7 @@ body:
     id: capsule
     attributes:
       label: Capsule / output
-      description: Paste the `.flakesmith/*.json` capsule or the command output. Redact private paths if you like.
+      description: Paste the `.go-flake-hunter/*.json` capsule or the command output. Redact private paths if you like.
       render: shell
   - type: input
     id: go
@@ -33,4 +33,4 @@ body:
     attributes:
       label: Leftover check
       options:
-        - label: My repo has no leftover `zz_flakesmith_witness_*` files from the run (if it does, `git status` output goes above — that is exactly the bug we want)
+        - label: My repo has no leftover `zz_goflakehunter_witness_*` files from the run (if it does, `git status` output goes above — that is exactly the bug we want)

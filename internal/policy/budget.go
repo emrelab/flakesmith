@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/emrelab/flakesmith/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
 )
 
 // Defaults.
@@ -19,7 +19,7 @@ import (
 // local hunt may lose before it feels stuck.
 //
 // These are the LOCAL defaults. The GitHub Action (`action.yml`) and the
-// `flakesmith init` scaffold use 200 runs / 10m instead: a shared CI runner
+// `go-flake-hunter init` scaffold use 200 runs / 10m instead: a shared CI runner
 // pays for wall clock far more dearly than a laptop, so the two surfaces start
 // from different points on purpose. The divergence is stated in the README
 // ("Budget defaults differ by surface") — changing one side is a product

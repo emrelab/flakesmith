@@ -19,7 +19,7 @@ import (
 // parse are skipped (a broken file is reported by `go build`, not by us).
 //
 // Files excluded by a build constraint are skipped. That is not pedantry: our
-// own regression test carries `//go:build flakesmith` and full of t.Run calls,
+// own regression test carries `//go:build goflakehunter` and full of t.Run calls,
 // so counting it would mark the package as "uses subtests" and make every later
 // hunt in that package skip itself — a silent, self-inflicted no-op.
 //

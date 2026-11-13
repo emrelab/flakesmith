@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/emrelab/flakesmith/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
 )
 
 // A sample trimmed from a real `go test -json` stream: one test passes, one

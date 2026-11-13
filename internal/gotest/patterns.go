@@ -9,13 +9,13 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/emrelab/flakesmith/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
 )
 
 // ExpandPatterns turns `go test`-style package arguments into concrete
 // directories.
 //
-// Why this exists: every real invocation is `flakesmith hunt ./...`, and a tool
+// Why this exists: every real invocation is `go-flake-hunter hunt ./...`, and a tool
 // that only accepts one literal directory answers that with a usage error. The
 // expansion is delegated to `go list`, which knows about module boundaries,
 // build constraints, vendor directories and the testdata exclusion — writing

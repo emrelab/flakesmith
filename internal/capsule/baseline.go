@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/emrelab/flakesmith/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
 )
 
 // ErrLegacyBaseline requires an explicit rescan; v1 hashes cannot be reversed.
@@ -18,7 +18,7 @@ var ErrLegacyBaseline = errors.New("baseline v1 uses commit-specific capsule IDs
 // BaselineFileName is the name of the known-flake list inside the capsule directory.
 const BaselineFileName = "baseline.json"
 
-// DefaultBaselinePath is <dir>/.flakesmith/baseline.json.
+// DefaultBaselinePath is <dir>/.go-flake-hunter/baseline.json.
 //
 // The path is relative to the invoked directory, not the capsule directory:
 // `hunt ./...` scans many packages but the baseline is one per repository. One
@@ -45,7 +45,7 @@ func LoadBaseline(path string) (domain.Baseline, error) {
 	if err := json.Unmarshal(data, &b); err != nil {
 		return b, fmt.Errorf("%w: baseline is corrupt (%s): %v", domain.ErrUsage, path, err)
 	}
-	if b.Schema == "flakesmith/baseline/v1" {
+	if b.Schema == "flakesmith/baseline/v1" || b.Schema == "flakesmith/baseline/v2" {
 		return b, fmt.Errorf("%w: %w", domain.ErrUsage, ErrLegacyBaseline)
 	}
 	if b.Schema != domain.BaselineSchemaVersion {

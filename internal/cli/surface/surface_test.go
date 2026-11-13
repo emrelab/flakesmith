@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/emrelab/flakesmith/internal/clitest"
-	"github.com/emrelab/flakesmith/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/clitest"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
 )
 
 func TestVersion(t *testing.T) {
@@ -15,7 +15,7 @@ func TestVersion(t *testing.T) {
 	if code != domain.ExitOK {
 		t.Fatalf("code = %d", code)
 	}
-	if !strings.HasPrefix(out, "flakesmith ") {
+	if !strings.HasPrefix(out, "go-flake-hunter ") {
 		t.Errorf("out = %q", out)
 	}
 }
@@ -28,7 +28,7 @@ func TestDebugFlagIsGlobal(t *testing.T) {
 		if code != domain.ExitOK {
 			t.Fatalf("%v: code=%d err=%s", args, code, errOut)
 		}
-		if !strings.HasPrefix(out, "flakesmith ") {
+		if !strings.HasPrefix(out, "go-flake-hunter ") {
 			t.Errorf("%v: out = %q", args, out)
 		}
 	}
@@ -93,10 +93,10 @@ func TestReproWithoutArgsIsUsageError(t *testing.T) {
 	}
 }
 
-// A capsule reference must be accepted in three forms: raw id, `ls .flakesmith`
+// A capsule reference must be accepted in three forms: raw id, `ls .go-flake-hunter`
 // output (bare file name) and a real path. Users cannot retype what they
 // pasted; forcing them to memorize the id format is a product bug. A real repo
-// had dropped one form: `replay fs_x.json` → "capsule not found: fs_x.json".
+// had dropped one form: `replay gfh_x.json` → "capsule not found: gfh_x.json".
 func TestCapsuleRefAcceptsIdNameAndPath(t *testing.T) {
 	if testing.Short() {
 		t.Skip("integration test")
@@ -110,7 +110,7 @@ func TestCapsuleRefAcceptsIdNameAndPath(t *testing.T) {
 	if err != nil || len(entries) == 0 {
 		t.Fatalf("capsule was not written: %v", err)
 	}
-	name := entries[0].Name() // fs_xxx.json
+	name := entries[0].Name() // gfh_xxx.json
 	id := strings.TrimSuffix(name, ".json")
 
 	for _, ref := range []string{id, name, filepath.Join(store, name)} {
@@ -131,7 +131,7 @@ func TestInitIsIdempotent(t *testing.T) {
 	if code, _, errOut := clitest.Run("init", dir); code != domain.ExitOK {
 		t.Fatalf("code=%d %s", code, errOut)
 	}
-	path := filepath.Join(dir, ".github", "workflows", "flakesmith.yml")
+	path := filepath.Join(dir, ".github", "workflows", "go-flake-hunter.yml")
 	before, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("workflow was not written: %v", err)
@@ -171,7 +171,7 @@ func TestExplainRerendersCapsule(t *testing.T) {
 	if !strings.Contains(out, "| class | repeat |") {
 		t.Errorf("explain output missing:\n%s", out)
 	}
-	leftovers, _ := filepath.Glob(filepath.Join(dir, "zz_flakesmith_witness_*"))
+	leftovers, _ := filepath.Glob(filepath.Join(dir, "zz_goflakehunter_witness_*"))
 	if len(leftovers) > 0 {
 		t.Errorf("explain must not run anything, left witness files: %v", leftovers)
 	}
@@ -179,15 +179,15 @@ func TestExplainRerendersCapsule(t *testing.T) {
 
 func TestInitAddsRecordedCapsuleGate(t *testing.T) {
 	dir := t.TempDir()
-	code, _, errs := clitest.Run("init", dir, "--replay-capsule", ".flakesmith/fs_123.json")
+	code, _, errs := clitest.Run("init", dir, "--replay-capsule", ".go-flake-hunter/gfh_123.json")
 	if code != 0 {
 		t.Fatalf("init %d %s", code, errs)
 	}
-	data, err := os.ReadFile(filepath.Join(dir, ".github/workflows/flakesmith.yml"))
+	data, err := os.ReadFile(filepath.Join(dir, ".github/workflows/go-flake-hunter.yml"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"guard recorded flake", "replay '.flakesmith/fs_123.json' -n 3", "3) echo", `*) exit "$status"`} {
+	for _, want := range []string{"guard recorded flake", "replay '.go-flake-hunter/gfh_123.json' -n 3", "3) echo", `*) exit "$status"`} {
 		if !strings.Contains(string(data), want) {
 			t.Fatalf("missing %q: %s", want, data)
 		}

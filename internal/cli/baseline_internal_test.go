@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/emrelab/flakesmith/internal/capsule"
-	"github.com/emrelab/flakesmith/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/capsule"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
 )
 
 func TestBaselineWriteMigrationAndPreservation(t *testing.T) {
@@ -17,8 +17,9 @@ func TestBaselineWriteMigrationAndPreservation(t *testing.T) {
 		name, body string
 		wantErr    bool
 	}{
-		{"legacy", `{"schema":"flakesmith/baseline/v1","ids":["fs_old"]}`, false},
-		{"current", `{"schema":"flakesmith/baseline/v2","ids":["fd_known"]}`, false},
+		{"legacy", `{"schema":"flakesmith/baseline/v1","ids":["gfh_old"]}`, false},
+		{"legacy-v2", `{"schema":"flakesmith/baseline/v2","ids":["fd_known"]}`, false},
+		{"current", `{"schema":"go-flake-hunter/baseline/v2","ids":["fd_known"]}`, false},
 		{"corrupt", `{broken`, true},
 		{"unknown", `{"schema":"future","ids":[]}`, true},
 	} {
@@ -46,8 +47,12 @@ func TestBaselineWriteMigrationAndPreservation(t *testing.T) {
 			if tc.name == "current" && !b.Contains("fd_known") {
 				t.Fatal("existing fingerprint lost")
 			}
-			if tc.name == "legacy" && (b.Contains("fs_old") || !strings.Contains(stderr.String(), "rescan every")) {
+			if strings.HasPrefix(tc.name, "legacy") &&
+				(!strings.Contains(stderr.String(), "rescan every") || b.Contains("fd_known") && tc.name == "legacy-v2") {
 				t.Fatalf("legacy migration was silent or mixed hashes: %v %s", b, stderr.String())
+			}
+			if tc.name == "legacy" && b.Contains("gfh_old") {
+				t.Fatalf("pre-rename capsule ids survived a migration: %v", b)
 			}
 		})
 	}

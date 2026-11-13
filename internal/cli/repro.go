@@ -8,8 +8,8 @@ import (
 	"io"
 	"os"
 
-	"github.com/emrelab/flakesmith/internal/domain"
-	"github.com/emrelab/flakesmith/internal/gotest"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/gotest"
 )
 
 // reproCmd re-derives and shrinks the witness for one known test.
@@ -37,14 +37,14 @@ func reproCmd(ctx context.Context, args []string, out IO) error {
 
 	if fromJSON != "" {
 		if len(rest) > 0 {
-			_, _ = fmt.Fprint(out.Stderr, "usage: flakesmith repro --from-json <failure.json>   (no package argument)\n")
+			_, _ = fmt.Fprint(out.Stderr, "usage: go-flake-hunter repro --from-json <failure.json>   (no package argument)\n")
 			return domain.ErrUsage
 		}
 		return reproFromJSON(ctx, fromJSON, o, out)
 	}
 
 	if len(rest) == 0 || len(rest) > 2 {
-		_, _ = fmt.Fprint(out.Stderr, "usage: flakesmith repro <package-dir> [TestName] | --from-json <file|->\n")
+		_, _ = fmt.Fprint(out.Stderr, "usage: go-flake-hunter repro <package-dir> [TestName] | --from-json <file|->\n")
 		return domain.ErrUsage
 	}
 	pkg := rest[0]

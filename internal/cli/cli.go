@@ -13,7 +13,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/emrelab/flakesmith/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
 )
 
 // Version is filled at build time via -ldflags.
@@ -63,7 +63,7 @@ func Execute(ctx context.Context, args []string, out IO) int {
 		usage(out.Stdout, cmds)
 		return domain.ExitOK
 	case "-v", "--version", "version":
-		_, _ = fmt.Fprintf(out.Stdout, "flakesmith %s\n", Version)
+		_, _ = fmt.Fprintf(out.Stdout, "go-flake-hunter %s\n", Version)
 		return domain.ExitOK
 	}
 
@@ -72,7 +72,7 @@ func Execute(ctx context.Context, args []string, out IO) int {
 			continue
 		}
 		if c.Run == nil {
-			_, _ = fmt.Fprintf(out.Stderr, "flakesmith: %q not implemented yet (task %d)\n", c.Name, c.Task)
+			_, _ = fmt.Fprintf(out.Stderr, "go-flake-hunter: %q not implemented yet (task %d)\n", c.Name, c.Task)
 			return domain.ExitUsage
 		}
 		err := c.Run(ctx, args[1:], out)
@@ -86,12 +86,12 @@ func Execute(ctx context.Context, args []string, out IO) int {
 			return domain.ExitOK
 		}
 		if msg := message(err, out.Debug); msg != "" {
-			_, _ = fmt.Fprintf(out.Stderr, "flakesmith: %s\n", msg)
+			_, _ = fmt.Fprintf(out.Stderr, "go-flake-hunter: %s\n", msg)
 		}
 		return domain.ExitCode(err)
 	}
 
-	_, _ = fmt.Fprintf(out.Stderr, "flakesmith: unknown command %q\n\n", name)
+	_, _ = fmt.Fprintf(out.Stderr, "go-flake-hunter: unknown command %q\n\n", name)
 	usage(out.Stderr, cmds)
 	return domain.ExitUsage
 }
@@ -174,8 +174,8 @@ func (e internalError) Unwrap() error { return e.err }
 func Internal(id string, err error) error { return internalError{id: id, err: err} }
 
 func usage(w io.Writer, cmds []Command) {
-	_, _ = fmt.Fprint(w, "flakesmith — flake reproduction and regression test generation for Go tests\n\n")
-	_, _ = fmt.Fprint(w, "Usage:\n  flakesmith <command> [flags]\n\nGlobal flag: --debug (internal error detail)\n\nCommands:\n")
+	_, _ = fmt.Fprint(w, "go-flake-hunter — flake reproduction and regression test generation for Go tests\n\n")
+	_, _ = fmt.Fprint(w, "Usage:\n  go-flake-hunter <command> [flags]\n\nGlobal flag: --debug (internal error detail)\n\nCommands:\n")
 	sorted := make([]Command, len(cmds))
 	copy(sorted, cmds)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Name < sorted[j].Name })

@@ -7,10 +7,10 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/emrelab/flakesmith/internal/domain"
-	"github.com/emrelab/flakesmith/internal/gotest"
-	"github.com/emrelab/flakesmith/internal/policy"
-	"github.com/emrelab/flakesmith/internal/search"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/gotest"
+	"github.com/emrelab/go-flake-hunter/internal/policy"
+	"github.com/emrelab/go-flake-hunter/internal/search"
 )
 
 // OrderCross detects cross-binary order pollution (#6): a test in another

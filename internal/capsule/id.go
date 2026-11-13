@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/emrelab/flakesmith/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
 )
 
 // ID derives the content-addressed identity of a witness.
@@ -52,7 +52,7 @@ func ID(w domain.Witness, module, commit string) string {
 	parts = append(parts, env...)
 
 	sum := sha256.Sum256([]byte(strings.Join(parts, "\x00")))
-	return "fs_" + hex.EncodeToString(sum[:])[:12]
+	return "gfh_" + hex.EncodeToString(sum[:])[:12]
 }
 
 // PartialID names a capsule that has no verified witness: the hunt stopped
@@ -74,7 +74,7 @@ func PartialID(target domain.Target, status domain.CapsuleStatus, reason, module
 		reason,
 	}
 	sum := sha256.Sum256([]byte(strings.Join(parts, "\x00")))
-	return "fs_" + hex.EncodeToString(sum[:])[:12]
+	return "gfh_" + hex.EncodeToString(sum[:])[:12]
 }
 
 // Fingerprint identifies a defect across commits. Run parameters, generated
@@ -89,5 +89,5 @@ func Fingerprint(w domain.Witness, module string) string {
 	if w.CrossBinary {
 		scope = "cross-process"
 	}
-	return "fd_" + strings.TrimPrefix(ID(w, module, scope), "fs_")
+	return "fd_" + strings.TrimPrefix(ID(w, module, scope), "gfh_")
 }

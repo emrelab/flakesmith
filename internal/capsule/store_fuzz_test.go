@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/emrelab/flakesmith/internal/capsule"
-	"github.com/emrelab/flakesmith/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/capsule"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
 )
 
 // FuzzStoreRead hammers the capsule load path (Store.Read) with arbitrary file
@@ -38,15 +38,15 @@ func FuzzStoreRead(f *testing.F) {
 		f.Add(data[:len(data)/2])
 	}
 	seeds := []string{
-		`{"schema":"flakesmith/v1","id":"x"}`,
-		`{"schema":"flakesmith/v2","id":"x"}`, // foreign version must be rejected
+		`{"schema":"flakesmith/v1","id":"x"}`,      // pre-rename, still readable
+		`{"schema":"go-flake-hunter/v3","id":"x"}`, // foreign version must be rejected
 		"{",
 		"null",
 		"[]",
 		`"just a string"`,
-		`{"schema":"flakesmith/v1","id":123}`, // wrong id type
-		`{"schema":"flakesmith/v1","createdAt":"x"}`, // unparseable time
-		`{"schema":"flakesmith/v1","observation":{"failureRate":"fast"}}`,
+		`{"schema":"go-flake-hunter/v2","id":123}`,        // wrong id type
+		`{"schema":"go-flake-hunter/v2","createdAt":"x"}`, // unparseable time
+		`{"schema":"go-flake-hunter/v2","observation":{"failureRate":"fast"}}`,
 	}
 	for _, s := range seeds {
 		f.Add([]byte(s))
@@ -62,7 +62,7 @@ func FuzzStoreRead(f *testing.F) {
 		if err != nil {
 			return // corrupt input rejected as data — that is the contract
 		}
-		if c.Schema != domain.SchemaVersion {
+		if !domain.ReadableSchema(c.Schema) {
 			t.Errorf("Read accepted foreign schema %q with nil error", c.Schema)
 		}
 		// Listing must survive the same file no matter what it contains.

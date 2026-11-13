@@ -7,7 +7,22 @@ import (
 
 // SchemaVersion is the version of the capsule JSON schema.
 // It is increased on breaking changes; old capsules remain readable.
-const SchemaVersion = "flakesmith/v1"
+//
+// The name inside the schema id is part of the contract, so the rename from
+// flakesmith to go-flake-hunter is a version bump even though the document's
+// shape did not change: without it a pre-rename capsule would look current and
+// silently keep an id computed under the old schema.
+const SchemaVersion = "go-flake-hunter/v2"
+
+// LegacySchema is the schema id written before the rename. Those capsules have
+// the same shape as SchemaVersion — only the identity string differs — so they
+// stay readable; ids are never recomputed for a capsule already on disk.
+const LegacySchema = "flakesmith/v1"
+
+// ReadableSchema reports whether a capsule schema id is one this build can read.
+func ReadableSchema(schema string) bool {
+	return schema == SchemaVersion || schema == LegacySchema
+}
 
 // CapsuleStatus is the confidence level of a witness.
 type CapsuleStatus string
@@ -60,7 +75,7 @@ type Target struct {
 	// Package is the import path (stable identity, survives a different cwd).
 	Package string `json:"package"`
 	// RelDir is the directory as the user typed it, so the reported
-	// reproduce command is runnable from where they invoked flakesmith.
+	// reproduce command is runnable from where they invoked go-flake-hunter.
 	RelDir string `json:"relDir,omitempty"`
 	Victim string `json:"victim"`
 	// VictimFile is the base name of the file declaring the victim test

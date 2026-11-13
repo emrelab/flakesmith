@@ -6,7 +6,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/emrelab/flakesmith/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
 )
 
 // SARIF 2.1.0 is the output format GitHub code scanning consumes: every found
@@ -32,9 +32,9 @@ func SARIF(w io.Writer, flakes []domain.Capsule, version string) error {
 		Schema:  "https://json.schemastore.org/sarif-2.1.0.json",
 		Runs: []sarifRun{{
 			Tool: sarifTool{Driver: sarifDriver{
-				Name:           "FlakeSmith",
+				Name:           "go-flake-hunter",
 				Version:        version,
-				InformationURI: "https://github.com/emrelab/flakesmith",
+				InformationURI: "https://github.com/emrelab/go-flake-hunter",
 				Rules:          sarifRules(),
 			}},
 			Results: results,
@@ -58,13 +58,13 @@ func sarifRules() []sarifRule {
 		}
 	}
 	return []sarifRule{
-		mk("flakesmith/repeat", "repeat-dependent flake",
-			"The test fails when run again in the same process: state leaks between runs of the same test. Reproduce with `go test -count=N`; flakesmith's capsule records the count that proved it."),
-		mk("flakesmith/order", "order-dependent flake",
+		mk("go-flake-hunter/repeat", "repeat-dependent flake",
+			"The test fails when run again in the same process: state leaks between runs of the same test. Reproduce with `go test -count=N`; go-flake-hunter's capsule records the count that proved it."),
+		mk("go-flake-hunter/order", "order-dependent flake",
 			"The test fails only after another test (the polluter) has run first: shared package state. The capsule names the minimal polluter set; fix ownership, not the seed."),
-		mk("flakesmith/parallel", "parallel-dependent flake",
+		mk("go-flake-hunter/parallel", "parallel-dependent flake",
 			"The test fails only when run concurrently with another test: unsynchronized shared state. Run the witness with the -parallel width it records."),
-		mk("flakesmith/env", "environment-dependent flake",
+		mk("go-flake-hunter/env", "environment-dependent flake",
 			"The test outcome changes with the value of an environment variable the code reads literally. The capsule stores the key, never the value; set it to reproduce."),
 	}
 }
@@ -99,7 +99,7 @@ func sarifForResult(c domain.Capsule) sarifResult {
 	}
 
 	r := sarifResult{
-		RuleID:  "flakesmith/" + string(c.Kind),
+		RuleID:  "go-flake-hunter/" + string(c.Kind),
 		Level:   "warning",
 		Message: sarifText{b.String()},
 	}

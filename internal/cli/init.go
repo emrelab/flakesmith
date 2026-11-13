@@ -10,22 +10,22 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/emrelab/flakesmith/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
 )
 
 // workflowPath is where the generated CI job lives.
-const workflowPath = ".github/workflows/flakesmith.yml"
+const workflowPath = ".github/workflows/go-flake-hunter.yml"
 
 // workflowTemplate is the job `init` writes.
 //
 // Deliberately narrow: it hints (`continue-on-error`) instead of gating, because
 // a newly adopted flake hunter that turns CI red on day one gets removed on day
 // two. `--fail-on-flake` is one line away in the file for teams that want a gate.
-const workflowTemplate = `# flakesmith: flaky test hunting.
+const workflowTemplate = `# go-flake-hunter: flaky test hunting.
 #
-# Generated: flakesmith init. Edit freely; this file is never
+# Generated: go-flake-hunter init. Edit freely; this file is never
 # written again (init does not touch an existing file).
-name: flakesmith
+name: go-flake-hunter
 
 on:
   pull_request:
@@ -49,19 +49,19 @@ jobs:
         continue-on-error: true
         run: |
           set -o pipefail
-          go run github.com/emrelab/flakesmith/cmd/flakesmith@latest hunt ./... \
-            --format markdown --budget 200 --timeout 10m | tee flakesmith-report.md
+          go run github.com/emrelab/go-flake-hunter/cmd/go-flake-hunter@latest hunt ./... \
+            --format markdown --budget 200 --timeout 10m | tee go-flake-hunter-report.md
 
       - name: attach report
         if: always()
-        run: cat flakesmith-report.md >> "$GITHUB_STEP_SUMMARY"
+        run: cat go-flake-hunter-report.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: store capsules
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: flakesmith-capsules
-          path: "**/.flakesmith/*.json"
+          name: go-flake-hunter-capsules
+          path: "**/.go-flake-hunter/*.json"
           if-no-files-found: ignore
 `
 
@@ -117,7 +117,7 @@ func initCmd(ctx context.Context, args []string, out IO) error {
 	}
 
 	_, _ = fmt.Fprintf(out.Stdout, "written: %s\n", path)
-	_, _ = fmt.Fprintln(out.Stdout, "\nNext step: flakesmith hunt ./... (run it once locally, see the output)")
+	_, _ = fmt.Fprintln(out.Stdout, "\nNext step: go-flake-hunter hunt ./... (run it once locally, see the output)")
 	return nil
 }
 
@@ -128,8 +128,8 @@ func replayGate(path string) string {
 	return fmt.Sprintf(`      - name: guard recorded flake
         run: |
           set +e
-          GOBIN="$RUNNER_TEMP/flakesmith-bin" go install github.com/emrelab/flakesmith/cmd/flakesmith@latest || exit $?
-          "$RUNNER_TEMP/flakesmith-bin/flakesmith" replay %s -n 3
+          GOBIN="$RUNNER_TEMP/go-flake-hunter-bin" go install github.com/emrelab/go-flake-hunter/cmd/go-flake-hunter@latest || exit $?
+          "$RUNNER_TEMP/go-flake-hunter-bin/go-flake-hunter" replay %s -n 3
           status=$?
           case "$status" in
             0) echo "Recorded flake reproduced"; exit 1 ;;

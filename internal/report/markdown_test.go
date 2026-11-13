@@ -5,14 +5,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/emrelab/flakesmith/internal/domain"
-	"github.com/emrelab/flakesmith/internal/report"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/report"
 )
 
 func capsule() domain.Capsule {
 	return domain.Capsule{
 		Schema: domain.SchemaVersion,
-		ID:     "fs_abc123456789",
+		ID:     "gfh_abc123456789",
 		Kind:   domain.KindOrder,
 		Target: domain.Target{Package: "example.com/svc", RelDir: ".", Victim: "TestCheckout"},
 		Witness: domain.Witness{
@@ -46,7 +46,7 @@ func TestMarkdownIsATable(t *testing.T) {
 		"| polluter | TestSeedDB |",
 		"| evidence | TestSeedDB writes, TestCheckout reads: seeded |",
 		"```sh",
-		"fs_abc123456789",
+		"gfh_abc123456789",
 	} {
 		if !strings.Contains(s, want) {
 			t.Errorf("%q missing from markdown:\n%s", want, s)

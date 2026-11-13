@@ -6,10 +6,10 @@ ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 OUT=${1:?usage: scripts/verify-real-world.sh OUTPUT_DIRECTORY}
 mkdir -p "$OUT"
 OUT=$(cd "$OUT" && pwd)
-SCRATCH=$(mktemp -d "${TMPDIR:-/tmp}/flakesmith-proof.XXXXXX")
+SCRATCH=$(mktemp -d "${TMPDIR:-/tmp}/go-flake-hunter-proof.XXXXXX")
 trap 'rm -rf "$SCRATCH"' EXIT
-BIN="$SCRATCH/flakesmith"
-(cd "$ROOT" && go build -o "$BIN" ./cmd/flakesmith)
+BIN="$SCRATCH/go-flake-hunter"
+(cd "$ROOT" && go build -o "$BIN" ./cmd/go-flake-hunter)
 
 verify_case() {
  local name=$1 repo=$2 base=$3 fix=$4 pkg=$5 victim=$6 flags=$7 source=$8 pr=$9 patch_source=${10}
@@ -39,9 +39,9 @@ PY
   "$BIN" replay "$id" --pkg . --capsule-dir "$artifacts/capsules" -n 5 > "$artifacts/replay.txt"
   "$BIN" compile "$id" --pkg . --capsule-dir "$artifacts/capsules" --verify > "$artifacts/compile.txt"
   "$BIN" explain "$id" --capsule-dir "$artifacts/capsules" --format markdown > "$artifacts/report.md"
-  cp "${source%_test.go}_${victim}_flakesmith_test.go" "$artifacts/regression_test.go.txt"
+  cp "${source%_test.go}_${victim}_goflakehunter_test.go" "$artifacts/regression_test.go.txt"
   git -C "$checkout" apply "$artifacts/upstream-fix.patch"
-  go test -tags flakesmith -run "^TestFlakeRegression_${victim}$" -count=1 . > "$artifacts/after-fix.txt"
+  go test -tags goflakehunter -run "^TestFlakeRegression_${victim}$" -count=1 . > "$artifacts/after-fix.txt"
   # A fixed witness must be reported as stale, never as still confirmed.
   local status=0
   "$BIN" replay "$id" --pkg . --capsule-dir "$artifacts/capsules" -n 2 > "$artifacts/after-fix-replay.txt" 2>&1 || status=$?
@@ -51,7 +51,7 @@ PY
 import json, pathlib, platform, subprocess, sys
 out, repo, base, fix, pkg, victim, flags, pr = sys.argv[1:]
 p = pathlib.Path(out)
-capsule = json.loads(next((p/'capsules').glob('fs_*.json')).read_text())
+capsule = json.loads(next((p/'capsules').glob('gfh_*.json')).read_text())
 assert capsule['verifyStatus'] == 'verified'
 summary = dict(repository=repo, upstream=pr, base=base, fix=fix, package=pkg,
                victim=victim, polluters=[x['name'] for x in capsule['witness']['polluters']],

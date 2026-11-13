@@ -3,8 +3,8 @@
 ## Setup
 
 ```sh
-git clone https://github.com/emrelab/flakesmith
-cd flakesmith
+git clone https://github.com/emrelab/go-flake-hunter
+cd go-flake-hunter
 make all          # fmt + vet + test + build
 ```
 
@@ -71,7 +71,7 @@ the rules live in one file, `docs/AUTO.md`.
   gave up and said why. `P1` overrides the order.
 - Only a human applies `auto:safe` / `auto:review` / `P1`. A run may never
   promote its own work.
-- A run starts on demand — `make auto` or the `flakesmith-oto-issue` cron —
+- A run starts on demand — `make auto` or the `go-flake-hunter-oto-issue` cron —
   and stops itself when the queue drains (`KUYRUK BOS`). Never on a schedule
   that keeps firing past the work: a timer with an empty queue is how a repo
   starts inventing things to do.

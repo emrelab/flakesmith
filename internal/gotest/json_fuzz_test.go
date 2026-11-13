@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/emrelab/flakesmith/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
 )
 
 // FuzzParseEvents hammers the `go test -json` stream parser with arbitrary bytes.

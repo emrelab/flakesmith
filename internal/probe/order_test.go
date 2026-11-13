@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/emrelab/flakesmith/internal/domain"
-	"github.com/emrelab/flakesmith/internal/facts"
-	"github.com/emrelab/flakesmith/internal/gotest"
-	"github.com/emrelab/flakesmith/internal/probe"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/facts"
+	"github.com/emrelab/go-flake-hunter/internal/gotest"
+	"github.com/emrelab/go-flake-hunter/internal/probe"
 )
 
 // Cross-clause tests share one binary and are replayed by top-level selection.
@@ -166,7 +166,7 @@ func TestOrderCancelLeavesNoWitnessFile(t *testing.T) {
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected a cancellation error, got %v", err)
 	}
-	leftovers, _ := filepath.Glob(filepath.Join(dir, "zz_flakesmith_witness_*"))
+	leftovers, _ := filepath.Glob(filepath.Join(dir, "zz_goflakehunter_witness_*"))
 	if len(leftovers) > 0 {
 		t.Errorf("witness files left behind: %v", leftovers)
 	}

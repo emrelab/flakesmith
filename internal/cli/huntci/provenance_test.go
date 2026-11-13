@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/emrelab/flakesmith/internal/capsule"
-	"github.com/emrelab/flakesmith/internal/clitest"
-	"github.com/emrelab/flakesmith/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/capsule"
+	"github.com/emrelab/go-flake-hunter/internal/clitest"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
 )
 
 // The capsule records the commit it came from and whether the tree was dirty.
@@ -18,7 +18,7 @@ import (
 // trees can share an id — the artifact's whole claim to being reproducible.
 //
 // Nothing asserted this explicitly before: the fields were covered only because
-// two tests happened to hunt a fixture that lives inside flakesmith's own
+// two tests happened to hunt a fixture that lives inside go-flake-hunter's own
 // repository, so the values came from whatever the developer's working tree
 // looked like at that moment (and went uncovered the day those tests were moved
 // onto fixture copies). This pins them in a repository the test owns.
@@ -36,8 +36,8 @@ func TestHuntRecordsCapsuleProvenance(t *testing.T) {
 		cmd := exec.Command("git", append([]string{"-C", repo}, args...)...)
 		// The user's global identity and hooks must not affect the test.
 		cmd.Env = append(os.Environ(),
-			"GIT_AUTHOR_NAME=flakesmith", "GIT_AUTHOR_EMAIL=f@example.com",
-			"GIT_COMMITTER_NAME=flakesmith", "GIT_COMMITTER_EMAIL=f@example.com",
+			"GIT_AUTHOR_NAME=go-flake-hunter", "GIT_AUTHOR_EMAIL=f@example.com",
+			"GIT_COMMITTER_NAME=go-flake-hunter", "GIT_COMMITTER_EMAIL=f@example.com",
 			"GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null")
 		out, err := cmd.CombinedOutput()
 		if err != nil {

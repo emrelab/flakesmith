@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/emrelab/flakesmith/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
 )
 
 // synthStream builds a synthetic `go test -json` stream for n tests: pre-stream
@@ -14,7 +14,7 @@ import (
 // in-memory bytes — a benchmark must never spawn a `go test` subprocess.
 func synthStream(n int) []byte {
 	var sb strings.Builder
-	sb.WriteString("go: building flakesmith/bench...\n")
+	sb.WriteString("go: building go-flake-hunter/bench...\n")
 	sb.WriteString("{\"Action\":\"start\",\"Package\":\"bench/x\",\"Time\":\"2026-11-02T01:00:00Z\"}\n")
 	for i := 0; i < n; i++ {
 		name := fmt.Sprintf("TestGen%03d", i)

@@ -14,11 +14,11 @@ set -uo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 SCRATCH=$(mktemp -d "${TMPDIR:-/tmp}/fs-smoke.XXXXXX")
 trap 'rm -rf "$SCRATCH"' EXIT
-BIN="$SCRATCH/flakesmith"
+BIN="$SCRATCH/go-flake-hunter"
 REPO="$SCRATCH/sample-repo"
 
 echo "== 0. binary (from the working tree) =="
-(cd "$ROOT" && go build -o "$BIN" ./cmd/flakesmith) && echo "build ok"
+(cd "$ROOT" && go build -o "$BIN" ./cmd/go-flake-hunter) && echo "build ok"
 
 echo "== 1. sample repo: green by default, a realistic package that produces pollution =="
 mkdir -p "$REPO"
@@ -57,9 +57,9 @@ export FS_PATHS="./..." FS_BUDGET="200" FS_TIMEOUT="10m" FS_FORMAT="markdown" FS
 mkdir -p "$RUNNER_TEMP"; : > "$GITHUB_OUTPUT"; : > "$GITHUB_STEP_SUMMARY"
 cd "$REPO"
 
-# action.yml "hunt flakes" step script — the flakesmith command is the local binary.
+# action.yml "hunt flakes" step script — the go-flake-hunter command is the local binary.
 run_hunt_step() {
-  report="$RUNNER_TEMP/flakesmith-report.$FS_FORMAT"
+  report="$RUNNER_TEMP/go-flake-hunter-report.$FS_FORMAT"
   args=(hunt $FS_PATHS --format "$FS_FORMAT" --budget "$FS_BUDGET" --timeout "$FS_TIMEOUT")
   [ "$FS_FAIL" = "true" ] && args+=(--fail-on-flake)
 
@@ -77,11 +77,11 @@ run_hunt_step() {
 
 echo "== 2-6. step scripts + checks =="
 run_hunt_step; status=$?
-report="$RUNNER_TEMP/flakesmith-report.$FS_FORMAT"
+report="$RUNNER_TEMP/go-flake-hunter-report.$FS_FORMAT"
 [ -f "$report" ] && cat "$report" >> "$GITHUB_STEP_SUMMARY"
-# @actions/glob's `**/.flakesmith/*.json` pattern also matches zero segments;
+# @actions/glob's `**/.go-flake-hunter/*.json` pattern also matches zero segments;
 # the local equivalent uses find (no globstar in bash 3.2).
-capsule_count=$(find . -name '*.json' -path '*.flakesmith*' | grep -c . || true)
+capsule_count=$(find . -name '*.json' -path '*.go-flake-hunter*' | grep -c . || true)
 
 fail=0
 [ "$status" = "0" ] || { echo "FAIL: expected exit 0 with the gate off, got $status"; fail=1; }
@@ -89,12 +89,12 @@ grep -q "flakes=1" "$GITHUB_OUTPUT" || { echo "FAIL: GITHUB_OUTPUT flakes=1: $(c
 grep -q "^### flake: " "$report" || { echo "FAIL: no markdown heading"; fail=1; }
 [ -s "$GITHUB_STEP_SUMMARY" ] || { echo "FAIL: step summary empty"; fail=1; }
 [ "$capsule_count" -ge 1 ] || { echo "FAIL: no capsule artifact"; fail=1; }
-[ -z "$(find . -name 'zz_flakesmith_witness_*')" ] || { echo "FAIL: witness leftovers"; fail=1; }
+[ -z "$(find . -name 'zz_goflakehunter_witness_*')" ] || { echo "FAIL: witness leftovers"; fail=1; }
 
 # json format: the count must still be 1 and the output must be a single valid document.
 FS_FORMAT=json; : > "$GITHUB_OUTPUT"; run_hunt_step >/dev/null; json_status=$?
 grep -q "flakes=1" "$GITHUB_OUTPUT" || { echo "FAIL: not flakes=1 in json format: $(cat "$GITHUB_OUTPUT")"; fail=1; }
-python3 - "$RUNNER_TEMP/flakesmith-report.json" <<'PY' || { echo "FAIL: json output is not a single document"; fail=1; }
+python3 - "$RUNNER_TEMP/go-flake-hunter-report.json" <<'PY' || { echo "FAIL: json output is not a single document"; fail=1; }
 import json,sys
 json.load(open(sys.argv[1]))
 PY

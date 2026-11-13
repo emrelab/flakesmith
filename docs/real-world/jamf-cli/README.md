@@ -47,7 +47,7 @@ flake found: TestCheckAPIMatchRefusesAPlatformCommandOnAnInstanceProfile
   run          : 3/3 failed
   Wilson 95%   : 43.9%–100.0%
   deterministic: yes
-  capsule      : fs_e628d198b8b2
+  capsule      : gfh_e628d198b8b2
   status       : confirmed
 ```
 
@@ -55,7 +55,7 @@ Files in this directory:
 
 | File | What it is |
 |---|---|
-| [`capsules/fs_e628d198b8b2.json`](capsules/fs_e628d198b8b2.json) | the capsule; `repo.dirty` is `false`, base commit `977b704` |
+| [`capsules/gfh_e628d198b8b2.json`](capsules/gfh_e628d198b8b2.json) | the capsule; `repo.dirty` is `false`, base commit `977b704` |
 | [`repro.txt`](repro.txt) | the `repro --from-json` run that produced it (the checkout's absolute path is replaced by `<repo>`; nothing else is edited) |
 | [`shuffle-before.txt`](shuffle-before.txt) | seed sweep on pristine `977b704` |
 | [`shuffle-after.txt`](shuffle-after.txt) | the same sweep with the patch |
@@ -108,7 +108,7 @@ it. 11 lines, one test file, no production change.
 | `-shuffle=10` | **FAIL** | ok |
 | `-shuffle=1234` | **FAIL** | ok |
 
-A witness built from the capsule (polluter → victim, build-tagged `flakesmith`)
+A witness built from the capsule (polluter → victim, build-tagged `go-flake-hunter`)
 is RED before and GREEN after.
 
 One measurement lesson: an early "seed 7 fails" reading was taken while a second

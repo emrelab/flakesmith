@@ -278,9 +278,9 @@ Append the lines for each issue handled. No prose, no plan, no apology, no
 
 A human arms it; the system finishes on its own. Two entry points, one rulebook.
 
-**Scheduled (draining mode).** A Hermes cron job `flakesmith-oto-issue`
+**Scheduled (draining mode).** A Hermes cron job `go-flake-hunter-oto-issue`
 (`926d39926d48`) runs every 2 h and is **gated by a monitor**
-(`~/.hermes/scripts/flakesmith-queue.sh`): its output is the picked
+(`~/.hermes/scripts/go-flake-hunter-queue.sh`): its output is the picked
 issue line, `BUSY` on a dirty tree, or `EMPTY`. A tick that wakes up **drains**:
 it works one issue, passes §5 and §7 for it, and only then takes the next —
 `MAX_ISSUES=6` per tick, after which the next tick continues. A blocker (§8.3)
@@ -308,7 +308,7 @@ jq -r '.jobs[] | select(.id=="926d39926d48")
 The job is created **paused**. To drain the queue:
 
 ```
-hermes → "flakesmith kuyruğunu aç"        (cronjob_manage action=resume, job 926d39926d48)
+hermes → "go-flake-hunter kuyruğunu aç"        (cronjob_manage action=resume, job 926d39926d48)
 ```
 
 It pauses itself when `next.sh` returns 3 (`KUYRUK BOS`), so a finished queue

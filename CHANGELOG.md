@@ -6,6 +6,25 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- The project is named `go-flake-hunter` everywhere: module path, module
+  directory (`cmd/go-flake-hunter`), binary, `uses:` ref, workflow scaffold,
+  capsule directory (`.go-flake-hunter`), capsule id prefix (`gfh_`), build tag
+  (`goflakehunter` — a hyphen is not valid in a build constraint), SARIF tool
+  name and every doc. Three spellings existed before (a repository called
+  flakesmith, an Action listed as go-flake-hunter, and prose using both), which
+  meant a reader could not tell whether they were the same tool.
+- **Breaking, and why:** capsule ids are derived from the schema id, so
+  `SchemaVersion` moves to `go-flake-hunter/v2`. Capsules already on disk keep
+  their `gfh_`-era ids and stay readable (`domain.LegacySchema` accepts the
+  pre-rename `flakesmith/v1` on read), but a *new* hunt over the same defect
+  computes a new id. A pre-rename baseline (`flakesmith/baseline/v1` and
+  `/v2`) therefore triggers the existing explicit-rescan path instead of
+  silently comparing two id spaces.
+- The GitHub repository must be renamed to `go-flake-hunter` for the new module
+  path to resolve; GitHub redirects the old URL, so an installed
+  `@v0.2.1` keeps working.
+
 ### Added
 - Third real-world case, and the first where the witness is the contribution
   rather than a re-validation: `Jamf-Concepts/jamf-cli` @ `977b704`, issue
@@ -26,7 +45,7 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   drifts from what `testdata/fixtures/order-basic` actually prints (ids, run
   counts and Wilson bounds normalized). The job checks out with
   `fetch-depth: 0`, because a shallow clone cannot see the tags it verifies.
-- A GitHub Pages site at https://emrelab.github.io/flakesmith/ built from
+- A GitHub Pages site at https://emrelab.github.io/go-flake-hunter/ built from
   `docs/` by `.github/workflows/pages.yml` (build on PRs, deploy only from
   `main`). Docs pages need explicit front matter to be rendered rather than
   copied, and the fences carrying Go templates or Actions expressions are
@@ -80,12 +99,11 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   the AST scanner must see through (`x =`, `x.f =`, `x[i] =`, `*p =`, `(x) =`).
 
 ### Changed
-- The GitHub Action is published on the Marketplace as
-  [**go-flake-hunter**](https://github.com/marketplace/actions/go-flake-hunter)
-  instead of `flakesmith`. Marketplace rejects a name that matches a GitHub user
-  or organization, and `github.com/FlakeSmith` is an unrelated account, so the
-  v0.2.0 listing never appeared. The `uses:` line published in the README is
-  unchanged — the repository, not this field, is what a consumer references.
+- The GitHub Action's Marketplace listing name no longer differs from the
+  repository name. It had to back then: Marketplace rejects a listing name that
+  matches a GitHub user or organization, and `github.com/FlakeSmith` is an
+  unrelated account, so the v0.2.0 listing appeared under a second name. The
+  rename in this release collapses the two into one.
 - The README describes the release that exists. It claimed "no release has been
   cut yet" and "the only tag is `v0.1.0`" for a day after `v0.2.0` shipped with
   five binaries; the install section now carries the real download and `go
@@ -177,7 +195,7 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   repository") and the first v0.2.0 tag push died at the last step with all
   five platform builds green. The command now passes `--repo
   "$GITHUB_REPOSITORY"` explicitly — the job has no working tree by design.
-- The README's GitHub Actions snippet pinned `emrelab/flakesmith@v0.2.0`, a tag
+- The README's GitHub Actions snippet pinned `emrelab/go-flake-hunter@v0.2.0`, a tag
   that was never cut (`git tag` has only `v0.1.0`, `gh release list` is empty),
   so a copy-pasted workflow could not resolve the action. The example now pins
   `main` — the one ref that is both current and real — with a note to pin a `v*`
@@ -240,11 +258,11 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   API in use); CI now proves the floor on a real 1.24 toolchain (`oldest` job).
 - CI: per-PR repeat sweep is now `-count=3` on three OSes; the full
   `-count=10` sweep moved to a nightly workflow (`nightly.yml`).
-- CI: new `self-hunt` job runs `flakesmith hunt` on flakesmith's own repo.
+- CI: new `self-hunt` job runs `go-flake-hunter hunt` on go-flake-hunter's own repo.
 - The `parallel-race` fixture's fixed 40ms barrier replaced by an adaptive
   wait, so the fixture no longer loses its overlap window under load.
 - GitHub Action: the JSON flake counter pins the capsule id prefix
-  (`"id": "fs_`), so a future field named `id` cannot inflate the count.
+  (`"id": "gfh_`), so a future field named `id` cannot inflate the count.
 
 ### Added
 - SECURITY.md, dependabot (github-actions), issue/PR templates, CHANGELOG.
@@ -300,7 +318,7 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   `init`; four probe classes (repeat, order, parallel, env); capsules;
   GitHub Action; fixtures for every flake class; zero external dependencies.
 
-[Unreleased]: https://github.com/emrelab/flakesmith/compare/v0.2.1...HEAD
-[0.2.1]: https://github.com/emrelab/flakesmith/releases/tag/v0.2.1
-[0.2.0]: https://github.com/emrelab/flakesmith/releases/tag/v0.2.0
-[0.1.0]: https://github.com/emrelab/flakesmith/releases/tag/v0.1.0
+[Unreleased]: https://github.com/emrelab/go-flake-hunter/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/emrelab/go-flake-hunter/releases/tag/v0.2.1
+[0.2.0]: https://github.com/emrelab/go-flake-hunter/releases/tag/v0.2.0
+[0.1.0]: https://github.com/emrelab/go-flake-hunter/releases/tag/v0.1.0

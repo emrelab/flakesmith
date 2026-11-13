@@ -9,10 +9,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/emrelab/flakesmith/internal/capsule"
-	"github.com/emrelab/flakesmith/internal/cli"
-	"github.com/emrelab/flakesmith/internal/clitest"
-	"github.com/emrelab/flakesmith/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/capsule"
+	"github.com/emrelab/go-flake-hunter/internal/cli"
+	"github.com/emrelab/go-flake-hunter/internal/clitest"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
 )
 
 // --race must NOT lower recall.
@@ -101,7 +101,7 @@ func TestHuntSARIFPinsVictimOnDiff(t *testing.T) {
 		t.Fatalf("unexpected document: %s", out)
 	}
 	res := doc.Runs[0].Results[0]
-	if res.RuleID != "flakesmith/order" {
+	if res.RuleID != "go-flake-hunter/order" {
 		t.Errorf("ruleId = %q", res.RuleID)
 	}
 	if len(res.Locations) != 1 {

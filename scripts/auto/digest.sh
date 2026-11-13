@@ -189,7 +189,7 @@ queue() {
   # Paused with work waiting is the silent-failure case: nothing errors, nothing
   # runs, and the only observable is that the queue does not move.
   if [ "$state" = "paused" ] && ! [ $rc -eq 3 ]; then
-    echo "   MISMATCH: paused with ${pending:-?} issue(s) queued — a non-empty queue must not rest, re-arm with: flakesmith kuyruğunu aç"
+    echo "   MISMATCH: paused with ${pending:-?} issue(s) queued — a non-empty queue must not rest, re-arm with: go-flake-hunter kuyruğunu aç"
   elif [ "$state" != "paused" ] && [ $rc -eq 3 ]; then
     echo "   MISMATCH: armed with an empty queue — the next tick will pause itself, harmless but noisy"
   fi

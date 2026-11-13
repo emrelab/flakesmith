@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/emrelab/flakesmith/internal/capsule"
-	"github.com/emrelab/flakesmith/internal/clitest"
-	"github.com/emrelab/flakesmith/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/capsule"
+	"github.com/emrelab/go-flake-hunter/internal/clitest"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
 )
 
 // The baseline's whole promise: a known flake does not break the gate, a new
@@ -54,7 +54,7 @@ func TestHuntBaselineGatesOnNewFlakesOnly(t *testing.T) {
 	if code != domain.ExitOK {
 		t.Fatalf("known flake broke the gate: code = %d (stderr=%s)", code, stderr)
 	}
-	if !strings.Contains(stderr, "known flake: fs_") {
+	if !strings.Contains(stderr, "known flake: gfh_") {
 		t.Errorf("known flake was not reported:\n%s", stderr)
 	}
 	if !strings.Contains(stderr, "baseline: 1 known, 0 new") {
@@ -68,7 +68,7 @@ func TestHuntBaselineGatesOnNewFlakesOnly(t *testing.T) {
 	// not counted "known". A one-line baseline is enough here — what is really
 	// measured is the direction of the id comparison.
 	foreign := filepath.Join(t.TempDir(), "baseline.json")
-	if err := capsule.WriteBaseline(foreign, []string{"fs_000000000000"}); err != nil {
+	if err := capsule.WriteBaseline(foreign, []string{"gfh_000000000000"}); err != nil {
 		t.Fatal(err)
 	}
 	code, _, stderr = clitest.Run("hunt", dir, "--capsule-dir", store,
@@ -103,7 +103,7 @@ func TestBaselineSurvivesUnrelatedCommit(t *testing.T) {
 	t.Chdir(dir)
 	git := func(args ...string) {
 		t.Helper()
-		cmd := exec.Command("git", append([]string{"-c", "user.name=flakesmith", "-c", "user.email=f@example.com", "-c", "core.hooksPath="}, args...)...)
+		cmd := exec.Command("git", append([]string{"-c", "user.name=go-flake-hunter", "-c", "user.email=f@example.com", "-c", "core.hooksPath="}, args...)...)
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("git %v: %v\n%s", args, err, out)
 		}

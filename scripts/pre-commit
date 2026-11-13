@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# flakesmith pre-commit gate — mechanical CI gate over the packages a commit touches.
+# go-flake-hunter pre-commit gate — mechanical CI gate over the packages a commit touches.
 #
 # Why a hook: a rule that lives only on paper has no enforcement; CI is too
 # far away to keep each commit honest.

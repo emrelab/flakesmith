@@ -1,13 +1,13 @@
 .PHONY: all build test test-repeat cost vet fmt cover fixtures clean run smoke auto auto-next auto-verify auto-digest
 
-BINARY := flakesmith
+BINARY := go-flake-hunter
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X main.version=$(VERSION)
 
 all: fmt vet test build
 
 build:
-	go build -trimpath -ldflags "$(LDFLAGS)" -o $(BINARY) ./cmd/flakesmith
+	go build -trimpath -ldflags "$(LDFLAGS)" -o $(BINARY) ./cmd/go-flake-hunter
 
 run: build
 	./$(BINARY) help
@@ -68,4 +68,4 @@ fixtures:
 
 clean:
 	rm -f $(BINARY) coverage.out
-	rm -rf .flakesmith
+	rm -rf .go-flake-hunter

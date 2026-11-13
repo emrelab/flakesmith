@@ -8,7 +8,7 @@ title: CI reproduction recipe
 The pieces already ship; this page is the glue between them (#17).
 
 ```
-red `go test -json` log  →  flakesmith repro --from-json  →  witness  →  one PR comment
+red `go test -json` log  →  go-flake-hunter repro --from-json  →  witness  →  one PR comment
 ```
 
 The point is that the developer pastes nothing. CI already paid for the discovery
@@ -78,8 +78,8 @@ jobs:
 
       # Built from source on purpose: this job wants the same commit that just
       # failed, not a released binary.
-      - name: install flakesmith
-        run: go build -o "$RUNNER_TEMP/flakesmith" ./cmd/flakesmith
+      - name: install go-flake-hunter
+        run: go build -o "$RUNNER_TEMP/go-flake-hunter" ./cmd/go-flake-hunter
 
       - name: shrink the failures to a witness
         id: repro
@@ -87,7 +87,7 @@ jobs:
         # smaller than a full hunt: this job has suspects, not a search space.
         run: |
           set -uo pipefail
-          "$RUNNER_TEMP/flakesmith" repro \
+          "$RUNNER_TEMP/go-flake-hunter" repro \
             --from-json "$RUNNER_TEMP/go-test.json" \
             --format markdown --budget 200 --timeout 10m > "$RUNNER_TEMP/repro.md"
           echo "code=$?" >> "$GITHUB_OUTPUT"
@@ -100,7 +100,7 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
         run: |
           set -uo pipefail
-          printf '<!-- flakesmith-repro -->\n' | cat - "$RUNNER_TEMP/repro.md" > "$RUNNER_TEMP/body.md"
+          printf '<!-- go-flake-hunter-repro -->\n' | cat - "$RUNNER_TEMP/repro.md" > "$RUNNER_TEMP/body.md"
           printf '\n_Reproduced from the failing CI log; the capsule is attached to this run._\n' >> "$RUNNER_TEMP/body.md"
           gh pr comment "$PR" --body-file "$RUNNER_TEMP/body.md" --edit-last --create-if-none
 
@@ -108,8 +108,8 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: flakesmith-capsules
-          path: "**/.flakesmith/*.json"
+          name: go-flake-hunter-capsules
+          path: "**/.go-flake-hunter/*.json"
           if-no-files-found: ignore
 ```
 {% endraw %}
@@ -119,7 +119,7 @@ jobs:
 Verified locally on this repo (the command, its output shape and every exit code
 below). The real output, indented because it contains a fence of its own:
 
-    $ flakesmith repro --from-json failure.json --format markdown --budget 400 --timeout 120s
+    $ go-flake-hunter repro --from-json failure.json --format markdown --budget 400 --timeout 120s
     ### flake: TestVictim
     
     | field | value |
@@ -130,7 +130,7 @@ below). The real output, indented because it contains a fence of its own:
     | run | 3/3 failed |
     | evidence | TestPolluter writes, TestVictim reads: seeded |
     | status | confirmed |
-    | capsule | `fs_ad2495a77e2c` |
+    | capsule | `gfh_ad2495a77e2c` |
     
     Reproduce:
     
@@ -138,7 +138,7 @@ below). The real output, indented because it contains a fence of its own:
     go test . -run '^TestFlakeWitness$' -count=1 -parallel=1
     ```
     
-    Permanent regression test: `checkout_TestVictim_flakesmith_test.go` (build tag `flakesmith`).
+    Permanent regression test: `checkout_TestVictim_goflakehunter_test.go` (build tag `goflakehunter`).
     
 - `--format markdown` is the comment body, byte for byte — no templating needed.
 - `--from-json` resolves import paths with `go list`, so it must run inside the

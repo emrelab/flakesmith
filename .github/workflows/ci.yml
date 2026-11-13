@@ -17,7 +17,7 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     # The Windows runner's default shell is pwsh; the steps assume POSIX scripts
-    # (make, $(...) capture, ./flakesmith). Pinned to bash in one place.
+    # (make, $(...) capture, ./go-flake-hunter). Pinned to bash in one place.
     defaults:
       run:
         shell: bash
@@ -79,7 +79,7 @@ jobs:
         run: make build
 
       - name: smoke (help)
-        run: ./flakesmith help
+        run: ./go-flake-hunter help
 
   # go.mod's floor is go 1.24 (measured: `t.Chdir` in the cli tests is the
   # newest API used). This job proves the floor on a real 1.24 toolchain
@@ -131,7 +131,7 @@ jobs:
           rc=0
           # 600 runs: the sweep's run count is deterministic; measured on the
           # current tree at just under that. 15m wall for slower runners.
-          ./flakesmith hunt ./... --fail-on-flake --short --budget 600 --timeout 15m || rc=$?
+          ./go-flake-hunter hunt ./... --fail-on-flake --short --budget 600 --timeout 15m || rc=$?
           if [ "$rc" -eq 4 ]; then
             echo "::warning::self-hunt ran out of budget — inconclusive, nightly carries the sweep"
             exit 0
@@ -142,7 +142,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: self-hunt-capsules
-          path: "**/.flakesmith/*.json"
+          path: "**/.go-flake-hunter/*.json"
           if-no-files-found: ignore
           retention-days: 14
 

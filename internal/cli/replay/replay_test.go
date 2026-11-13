@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/emrelab/flakesmith/internal/capsule"
-	"github.com/emrelab/flakesmith/internal/cli"
-	"github.com/emrelab/flakesmith/internal/clitest"
-	"github.com/emrelab/flakesmith/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/capsule"
+	"github.com/emrelab/go-flake-hunter/internal/cli"
+	"github.com/emrelab/go-flake-hunter/internal/clitest"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
 )
 
 // replay: re-runs the witness. For env flakes the value is not in the capsule,
@@ -90,16 +90,16 @@ func TestReplayRejectsUnusableCapsule(t *testing.T) {
 			Status: domain.StatusConfirmed,
 		}
 	}
-	partial := confirmed("fs_partial")
+	partial := confirmed("gfh_partial")
 	partial.Status = domain.StatusPartial
 	partial.Note = "budget exceeded: 1/1 runs"
 	if _, err := capsule.NewStore(store).Write(partial); err != nil {
 		t.Fatalf("could not write capsule: %v", err)
 	}
-	if _, err := capsule.NewStore(store).Write(confirmed("fs_ok")); err != nil {
+	if _, err := capsule.NewStore(store).Write(confirmed("gfh_ok")); err != nil {
 		t.Fatalf("could not write capsule: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(store, "fs_broken.json"), []byte("broken"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(store, "gfh_broken.json"), []byte("broken"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -109,11 +109,11 @@ func TestReplayRejectsUnusableCapsule(t *testing.T) {
 		want string
 	}{
 		{"two arguments", []string{"replay", "a", "b"}, "at most one capsule"},
-		{"partial capsule", []string{"replay", "fs_partial", "-capsule-dir", store}, "partial capsule"},
-		{"broken json", []string{"replay", "fs_broken", "-capsule-dir", store}, "capsule is corrupt"},
-		{"zero runs", []string{"replay", "fs_ok", "-capsule-dir", store, "-n", "0"}, "-n must be positive"},
-		{"negative runs", []string{"replay", "fs_ok", "-capsule-dir", store, "-n", "-3"}, "-n must be positive"},
-		{"missing capsule", []string{"replay", "fs_yok", "-capsule-dir", store}, "capsule not found"},
+		{"partial capsule", []string{"replay", "gfh_partial", "-capsule-dir", store}, "partial capsule"},
+		{"broken json", []string{"replay", "gfh_broken", "-capsule-dir", store}, "capsule is corrupt"},
+		{"zero runs", []string{"replay", "gfh_ok", "-capsule-dir", store, "-n", "0"}, "-n must be positive"},
+		{"negative runs", []string{"replay", "gfh_ok", "-capsule-dir", store, "-n", "-3"}, "-n must be positive"},
+		{"missing capsule", []string{"replay", "gfh_yok", "-capsule-dir", store}, "capsule not found"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

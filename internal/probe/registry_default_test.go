@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/emrelab/flakesmith/internal/probe"
+	"github.com/emrelab/go-flake-hunter/internal/probe"
 )
 
 // TestDefaultIsTheWholeProbeSet pins the single definition of the probe set:

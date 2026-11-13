@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/emrelab/flakesmith/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
 )
 
 // fixture resolves testdata/fixtures/<name> from this package's directory.

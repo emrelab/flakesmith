@@ -22,6 +22,12 @@ claim is made that the entire upstream suite is green. `gosimple/slug#83` is
 merged (2024); `CLIProxyAPI#7356` is an open proposal, applied locally from its
 patch excerpt to prove the regression turns green.
 
+The recordings in this directory (`repro.json`, `capsules/`, `compile.txt`,
+`report.md`, `regression_test.go.txt`) are the verbatim output of the release
+that produced them, so they still carry that release's capsule prefix and build
+tag. They are evidence, not documentation: rewriting them to match a later name
+would make them no longer evidence.
+
 The jamf-cli case is the only one where the tool's output *is* the contribution
 rather than a re-validation: the flake was already reported by a maintainer, and
 `repro --from-json` turned 1873 preceding tests into the single polluter the fix
@@ -30,13 +36,13 @@ maintainer's, the minimal witness and the patch are not.
 
 ## Repeat the validation
 
-From the flakesmith checkout:
+From the go-flake-hunter checkout:
 
 ```sh
-scripts/verify-real-world.sh /tmp/flakesmith-real-world-evidence
+scripts/verify-real-world.sh /tmp/go-flake-hunter-real-world-evidence
 ```
 
-The script builds flakesmith from the current source, creates disposable
+The script builds go-flake-hunter from the current source, creates disposable
 checkouts, downloads each repository's pinned dependencies, records discovery,
 replays five times, generates and verifies the regression, applies the exact
 upstream test-file patch, and runs the same generated regression again. It also
@@ -67,7 +73,7 @@ pass.
 Discovery command, from the pinned upstream checkout:
 
 ```sh
-GOFLAGS=-shuffle=3 flakesmith repro . TestSlugMake --budget 200 --timeout 5m \
+GOFLAGS=-shuffle=3 go-flake-hunter repro . TestSlugMake --budget 200 --timeout 5m \
   --capsule-dir /tmp/slug-capsules --format json
 ```
 
@@ -94,7 +100,7 @@ Discovery command, from the pinned package directory:
 
 ```sh
 GOFLAGS='-run=^(TestCodexClientModelsApplyPatchRouting|TestResponsesWebsocketHomeSelectedAuthCallbackPinsAndReusesFirstSelection)$' \
-  flakesmith repro . TestCodexClientModelsApplyPatchRouting --budget 200 --timeout 5m \
+  go-flake-hunter repro . TestCodexClientModelsApplyPatchRouting --budget 200 --timeout 5m \
   --capsule-dir /tmp/cliproxy-capsules --format json
 ```
 

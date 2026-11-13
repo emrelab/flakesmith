@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/emrelab/flakesmith/internal/domain"
+	"github.com/emrelab/go-flake-hunter/internal/domain"
 )
 
 // Fake is the Runner used by every layer above gotest in tests.

@@ -6,7 +6,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/emrelab/flakesmith/internal/facts"
+	"github.com/emrelab/go-flake-hunter/internal/facts"
 )
 
 // A package-level var can be assigned through five shapes, and the scanner's
@@ -15,7 +15,7 @@ import (
 //
 // Until this test, only the plain `x = ...` shape was ever exercised, and only
 // by accident: it was reached because a CLI test hunted a fixture that sits
-// inside flakesmith's own repository. The other four shapes were covered by
+// inside go-flake-hunter's own repository. The other four shapes were covered by
 // nothing at all, which is exactly the kind of hole a coverage number hides
 // (it read as covered, then dropped when that accident was removed).
 func TestScanRecordsGlobalsWrittenThroughEveryShape(t *testing.T) {

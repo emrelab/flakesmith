@@ -60,7 +60,7 @@ jobs:
         run: |
           set -uo pipefail
           rc=0
-          ./flakesmith hunt ./... --fail-on-flake --budget 1000 --timeout 40m || rc=$?
+          ./go-flake-hunter hunt ./... --fail-on-flake --budget 1000 --timeout 40m || rc=$?
           if [ "$rc" -eq 4 ]; then
             echo "::warning::full self-hunt ran out of budget — raise --budget/--timeout or file it"
             exit 0
@@ -71,6 +71,6 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: nightly-hunt-capsules
-          path: "**/.flakesmith/*.json"
+          path: "**/.go-flake-hunter/*.json"
           if-no-files-found: ignore
           retention-days: 14
