@@ -42,8 +42,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
 
@@ -55,7 +55,7 @@ jobs:
 
       - name: save the -json log
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: go-test-json
           path: ${{ runner.temp }}/go-test.json
@@ -66,12 +66,12 @@ jobs:
     if: needs.test.result == 'failure'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: go-test-json
           path: ${{ runner.temp }}
@@ -106,7 +106,7 @@ jobs:
 
       - name: keep the capsules
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: go-flake-hunter-capsules
           path: "**/.go-flake-hunter/*.json"
