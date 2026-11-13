@@ -1,6 +1,18 @@
 version: 2
 updates:
+  # Only the Actions ecosystem: the module has no dependencies and no go.sum,
+  # so a gomod entry would open a PR that changes nothing.
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    # Routine bumps arrive as ONE PR: five separate pull requests for five
+    # version strings is five CI runs to read one line each. A major stays on
+    # its own, because that is the one that needs reading — codeql-action v3→v4
+    # changes its Node runtime and inputs, and a pages-family major has moved
+    # the artifact contract between actions that ship together.
+    groups:
+      actions-minor:
+        patterns: ['*']
+        update-types: ['minor', 'patch']
+    open-pull-requests-limit: 5
