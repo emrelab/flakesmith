@@ -6,6 +6,31 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- The release page is the annotated tag message again. `release.yml` published
+  with `gh release create --generate-notes`, which lists merged PR titles and
+  discards the tag body: v0.3.0's page carried nothing but a changelog link,
+  while the paragraph explaining *why* the version is breaking sat unread on
+  the tag itself. Publishing now uses `--notes-from-tag`, and `CONTRIBUTING.md`
+  says the tag must be annotated.
+- `docs/CI-REPRO.md` — the copy-paste CI recipe — pinned `checkout@v4`,
+  `setup-go@v5` and `upload/download-artifact@v4` while every workflow in this
+  repository ran `@v7`/`@v8`: a reader copying it installed action versions the
+  project had already moved past. The recipe now matches the repo.
+- The README banner claimed "257 tests" long after the suite had 209 (+2 fuzz
+  targets). The number is now the toolchain's own count.
+
+### Added
+- Three more `scripts/docs-drift.sh` gates, so the three defects above fail in
+  CI instead of on a reader: the publish step must take notes from the tag, an
+  action pinned in the docs must carry the same major as the workflows, and the
+  README's test count must equal `go test -list`'s.
+
+### Changed
+- `.github/dependabot.yml` groups routine (minor/patch) Actions bumps into one
+  weekly PR; a major still arrives on its own, because that is the pull request
+  that needs reading.
+
 ## [0.3.0] — 2026-11-13
 
 ### Changed
