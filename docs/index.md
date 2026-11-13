@@ -14,10 +14,10 @@ go install github.com/emrelab/go-flake-hunter/cmd/go-flake-hunter@v0.2.1
 | Where to go | What is there |
 |---|---|
 | [GitHub repository](https://github.com/emrelab/go-flake-hunter) | install, the first 5 minutes, every command and exit code |
-| [Marketplace listing](https://github.com/marketplace/actions/go-flake-hunter) | the GitHub Action, as **go-flake-hunter** |
+| [Marketplace listing](https://github.com/marketplace/actions/go-flake-hunter) | the GitHub Action, same name as the repository |
 | [Architecture](ARCHITECTURE.md) | package boundaries, algorithms, Go-specific traps |
 | [CI reproduction recipe](CI-REPRO.md) | turn a red `go test -json` log into a PR comment |
-| [Real-world evidence](real-world/README.md) | two upstream flake cases, witness before and after |
+| [Real-world evidence](real-world/README.md) | three upstream flake cases, witness before and after |
 | [Autonomous runbook](AUTO.md) | the scheduled loop and its rules |
 
 Apache-2.0. Not affiliated with any hosted vendor.

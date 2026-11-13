@@ -21,9 +21,11 @@ this project adheres to [Semantic Versioning](https://semver.org/).
   computes a new id. A pre-rename baseline (`flakesmith/baseline/v1` and
   `/v2`) therefore triggers the existing explicit-rescan path instead of
   silently comparing two id spaces.
-- The GitHub repository must be renamed to `go-flake-hunter` for the new module
-  path to resolve; GitHub redirects the old URL, so an installed
-  `@v0.2.1` keeps working.
+- The GitHub repository is renamed to `go-flake-hunter` to match the module
+  path: a module path that no longer names the repository cannot be fetched.
+  GitHub redirects the old URL, so a workflow still pinned to
+  `emrelab/flakesmith@v0.2.1` keeps resolving; the next tag is cut from the new
+  name.
 
 ### Added
 - Third real-world case, and the first where the witness is the contribution
