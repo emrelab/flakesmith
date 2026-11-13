@@ -1,4 +1,4 @@
-.PHONY: all build test test-repeat cost vet fmt cover fixtures clean run smoke auto auto-next auto-verify auto-digest
+.PHONY: all build test test-repeat cost vet fmt cover fixtures clean run smoke demo auto auto-next auto-verify auto-digest
 
 BINARY := go-flake-hunter
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
@@ -18,6 +18,11 @@ test:
 # action.yml's step scripts are validated locally, without GitHub.
 smoke:
 	scripts/action-smoke.sh
+
+# The README's demo GIF, rendered from the binary's real output over
+# testdata/fixtures/order-basic. Re-run it when the sample output changes.
+demo: build
+	python3 scripts/make-demo-gif.py
 
 # Using our own tool on ourselves: a state leak would surface here.
 test-repeat:
